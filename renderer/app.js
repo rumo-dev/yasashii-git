@@ -367,8 +367,8 @@ function updateChrome() {
     h('div', { class: 'spacer' }),
     h('button', { class: 'btn', id: 'syncAllBtn', title: 'サーバーの更新を確認して、新しいものがあれば取り込み、受信箱（招待・お知らせ）も確認します', onclick: doSyncAll }, '🔃 まとめて更新'),
     h('button', { class: 'btn', title: hint('fetch'), onclick: doFetch }, '🔄 ', termLabel('fetch')),
-    h('button', { class: 'btn' + (st.behind ? ' primary' : ''), title: hint('pull'), onclick: doPull }, '⬇️ ', termLabel('pull'), st.behind ? h('span', { class: 'badge' }, '↓' + st.behind) : null),
-    h('button', { class: 'btn' + (st.ahead ? ' primary' : ''), title: hint('push'), onclick: doPush }, '⬆️ ', termLabel('push'), st.ahead ? h('span', { class: 'badge' }, '↑' + st.ahead) : null),
+    h('button', { class: 'btn' + (st.behind ? ' primary' : ''), disabled: !st.behind, title: st.behind ? hint('pull') : '取り込む更新はありません', onclick: doPull }, '⬇️ ', termLabel('pull'), h('span', { class: 'badge' }, '↓' + (st.behind || 0))),
+    h('button', { class: 'btn' + (st.ahead ? ' primary' : ''), disabled: !st.ahead, title: st.ahead ? hint('push') : 'アップロードする記録はありません', onclick: doPush }, '⬆️ ', termLabel('push'), h('span', { class: 'badge' }, '↑' + (st.ahead || 0))),
     h('button', { class: 'btn ghost', title: 'エクスプローラー / Finder でフォルダを開く', onclick: () => APP('openFolder', S.repo) }, '📂'),
   ].filter(Boolean).forEach((el) => bar.appendChild(el));
   // ヒント

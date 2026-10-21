@@ -4,6 +4,7 @@ Views.changes = (() => {
   let sel = null;               // { path, mode: 'staged'|'unstaged'|'conflict', untracked }
   let listsEl, opEl, diffHead, diffBody, commitBox, summaryEl, bodyEl, amendEl, commitBtn, commitPushBtn, counterEl, undoBtn;
   let diffToken = 0;
+  const rangeState = { staged: { anchor: null, order: [] }, unstaged: { anchor: null, order: [] } };
   const draft = { summary: '', body: '', amend: false, auto: '', edited: false }; // auto=最後に自動で入れた下書き / edited=本人が書き換えたら true（以後は上書きしない）
   let autoEl;
 
@@ -27,10 +28,33 @@ Views.changes = (() => {
       commitBtn, commitPushBtn, undoBtn);
     diffHead = h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '変更内容'));
     diffBody = h('div', { style: { flex: 1, overflow: 'auto' } });
-    container.appendChild(h('div', { class: 'split changes' },
-      h('div', { class: 'pane' }, opEl, listsEl, commitBox),
-      h('div', { class: 'pane' }, diffHead, diffBody)));
+    const split = h('div', { class: 'split changes' },
+      h('div', { class: 'pane changes-list-pane' }, opEl, listsEl, commitBox),
+      h('div', { class: 'splitter', role: 'separator', 'aria-orientation': 'vertical', title: 'ドラッグして幅を変更' }),
+      h('div', { class: 'pane' }, diffHead, diffBody));
+    container.appendChild(split);
+    setupSplitter(split);
     onStatus(true);
+  }
+
+  function setupSplitter(split) {
+    const splitter = split.querySelector('.splitter');
+    splitter.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); splitter.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        const rect = split.getBoundingClientRect();
+        const width = Math.max(260, Math.min(rect.width - 300, ev.clientX - rect.left));
+        split.style.setProperty('--changes-list-width', `${width}px`);
+        try { localStorage.setItem('changes-list-width', String(Math.round(width))); } catch (_) { /* 保存できなくても幅は変更できる */ }
+      };
+      const end = () => { splitter.removeEventListener('pointermove', move); splitter.removeEventListener('pointerup', end); };
+      splitter.addEventListener('pointermove', move);
+      splitter.addEventListener('pointerup', end);
+    });
+    try {
+      const saved = Number(localStorage.getItem('changes-list-width'));
+      if (saved >= 260) split.style.setProperty('--changes-list-width', `${saved}px`);
+    } catch (_) { /* 保存領域が使えない場合は既定幅 */ }
   }
 
   function onStatus(first) {
@@ -95,11 +119,11 @@ Views.changes = (() => {
     const files = S.status.files;
     const staged = files.filter((f) => f.staged);
     const unstaged = files.filter((f) => f.unstaged && !f.conflict);
-    listsEl.appendChild(h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '✅ ', termLabel('stage', { text: '記録に含めるファイル' }), ` (${staged.length})`),
+    listsEl.appendChild(h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '✅ ', termLabel('stage', { text: '記録に含めるファイル' }), ` (${staged.length}) `, h('span', { class: 'muted', style: { fontSize: '11px', fontWeight: 400 } }, 'Shift＋クリックで範囲を外す')),
       staged.length ? h('button', { class: 'btn small', onclick: unstageAll, title: hint('unstage') }, 'すべて外す') : null));
     if (!staged.length) listsEl.appendChild(h('div', { class: 'empty', style: { padding: '14px' } }, '記録に含めるファイルはまだありません。'));
     staged.forEach((f) => listsEl.appendChild(fileRow(f, 'staged')));
-    listsEl.appendChild(h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '✏️ まだ含めていない変更', ` (${unstaged.length})`),
+    listsEl.appendChild(h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '✏️ まだ含めていない変更', ` (${unstaged.length}) `, h('span', { class: 'muted', style: { fontSize: '11px', fontWeight: 400 } }, 'Shift＋クリックで範囲をステージ')),
       unstaged.length ? [h('button', { class: 'btn small', onclick: stageAll }, 'すべて含める'),
         h('button', { class: 'btn small danger', onclick: discardAll, title: hint('discard') }, 'すべて破棄')] : null));
     if (!unstaged.length) listsEl.appendChild(h('div', { class: 'empty', style: { padding: '14px' } }, staged.length ? '他に変更はありません。' : '変更されたファイルはありません。'));
@@ -112,8 +136,11 @@ Views.changes = (() => {
     const label = mode === 'staged' ? f.indexLabel : f.workLabel;
     const selected = sel && sel.path === f.path && sel.mode === mode;
     const blocked = mode === 'unstaged' && !!f.tooBig;   // 100MB超：記録に含められない
-    const cb = h('input', { type: 'checkbox', checked: mode === 'staged', disabled: blocked, title: blocked ? '100MBを超えるため、そのままでは含められません（右の「対処を選ぶ」から）' : mode === 'staged' ? hint('unstage') : hint('stage'),
-      onclick: (e) => e.stopPropagation(), onchange: () => (mode === 'staged' ? unstageOne(f.path) : stageOne(f.path)) });
+    let shiftOnCheckbox = false;
+    const cb = h('input', { type: 'checkbox', checked: mode === 'staged', disabled: blocked, title: blocked ? '100MBを超えるため、そのままでは含められません（右の「対処を選ぶ」から）' : mode === 'staged' ? hint('unstage') : `${hint('stage')}（Shift＋クリックで範囲をまとめてステージ）`,
+      onpointerdown: (e) => { shiftOnCheckbox = e.shiftKey; },
+      onclick: (e) => { e.stopPropagation(); shiftOnCheckbox = shiftOnCheckbox || e.shiftKey; },
+      onchange: () => changeStage(f, mode, shiftOnCheckbox) });
     const acts = h('div', { class: 'acts' });
     if (blocked) acts.appendChild(h('button', { class: 'btn small', onclick: (e) => { e.stopPropagation(); bigFileDialog(f); } }, '対処を選ぶ'));
     if (mode === 'unstaged') {
@@ -121,7 +148,7 @@ Views.changes = (() => {
       acts.appendChild(h('button', { class: 'btn small ghost', title: 'ファイルを開く', onclick: (e) => { e.stopPropagation(); APP('openFile', S.repo, f.path).catch(showError); } }, '↗'));
       acts.appendChild(h('button', { class: 'btn small ghost danger', title: '変更を戻す', onclick: (e) => { e.stopPropagation(); discardOne(f); } }, '🗑'));
     }
-    return h('div', { class: 'file-row' + (selected ? ' selected' : '') + (blocked ? ' blocked' : ''), title: blocked ? `${fmtSize(f.size)}：100MBを超えるため記録に含められません` : f.orig ? `${f.orig} → ${f.path}` : f.path, onclick: () => select({ path: f.path, mode, untracked: f.untracked }), oncontextmenu: (e) => rowMenu(e, f, mode) },
+    return h('div', { class: 'file-row' + (selected ? ' selected' : '') + (blocked ? ' blocked' : ''), title: blocked ? `${fmtSize(f.size)}：100MBを超えるため記録に含められません` : mode === 'unstaged' ? 'クリックで範囲選択の起点を設定。Shift＋クリックで範囲をステージします。' : f.orig ? `${f.orig} → ${f.path}` : f.path, onclick: (e) => { if (!blocked && (mode === 'staged' || mode === 'unstaged')) { if (e.shiftKey) changeStage(f, mode, true); else setRangeAnchor(f, mode); } select({ path: f.path, mode, untracked: f.untracked }); }, oncontextmenu: (e) => rowMenu(e, f, mode) },
       cb, h('span', { class: 'st ' + code }, label || '変更'),
       h('span', { class: 'name' }, h('span', { class: 'dir' }, dir), base),
       blocked ? h('span', { class: 'pill red', title: '100MBを超えるファイルはGitHubに送れません' }, `🚫 ${fmtSize(f.size)}`) : f.lfs ? h('span', { class: 'pill blue', title: 'Git LFSで管理されます' }, 'LFS') : null, acts);
@@ -144,8 +171,31 @@ Views.changes = (() => {
   function select(s) { sel = s; drawOp(); drawLists(); loadDiff(); }
 
   /* ----------------- 操作 ----------------- */
-  async function stageOne(p) { const r = await G('stage', [p]).catch(showError); await refreshAll(); return r; }
-  async function unstageOne(p) { await G('unstage', [p]).catch(showError); await refreshAll(); }
+  async function changeStage(f, mode, useRange = false) {
+    const state = rangeState[mode];
+    const eligibleFiles = () => S.status.files.filter((x) => mode === 'staged' ? x.staged : x.unstaged && !x.conflict && !x.tooBig);
+    if (!useRange || !state.anchor || !state.order.length) {
+      setRangeAnchor(f, mode);
+      const r = await G(mode === 'staged' ? 'unstage' : 'stage', [f.path]).catch(showError);
+      await refreshAll();
+      return r;
+    }
+    const targetIndex = state.order.indexOf(f.path);
+    const anchorIndex = state.order.indexOf(state.anchor);
+    if (targetIndex < 0 || anchorIndex < 0) return changeStage(f, mode, false);
+    const from = Math.min(anchorIndex, targetIndex), to = Math.max(anchorIndex, targetIndex);
+    const eligible = new Set(eligibleFiles().map((x) => x.path));
+    const paths = state.order.slice(from, to + 1).filter((path) => eligible.has(path));
+    const r = await G(mode === 'staged' ? 'unstage' : 'stage', paths).catch(showError);
+    state.anchor = f.path;
+    await refreshAll();
+    return r;
+  }
+  function setRangeAnchor(f, mode) {
+    const state = rangeState[mode];
+    state.anchor = f.path;
+    state.order = S.status.files.filter((x) => mode === 'staged' ? x.staged : x.unstaged && !x.conflict).map((x) => x.path);
+  }
   async function stageAll() {
     const r = await G('stageAll').catch(showError); await refreshAll();
     if (r && r.skipped) toast(`100MBを超える ${r.skipped} 個のファイルは含めませんでした。右の「対処を選ぶ」から選べます。`, 'error');
