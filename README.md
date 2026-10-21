@@ -40,12 +40,12 @@
 
 `build-installer.bat`（または `npm run dist:win` / `dist:mac` / `dist:linux`）で `dist/` に次のファイルができます。
 
-- **Windows**：`yasashii-git-Setup-0.1.0-x64.exe`（インストーラー）と、インストール不要の**ポータブル版** `yasashii-git-Portable-0.1.0-x64.exe`
-- **Mac**：`yasashii-git-0.1.0-Mac-x64.dmg` / `-arm64.dmg`（Intel / Apple Silicon）
+- **Windows**：`yasashii-git-Setup-1.0.0-x64.exe`（インストーラー）と、インストール不要の**ポータブル版** `yasashii-git-Portable-1.0.0-x64.exe`
+- **Mac**：`yasashii-git-1.0.0-Mac-x64.dmg` / `-arm64.dmg`（Intel / Apple Silicon）
 - **Linux**：`.AppImage` / `.deb`
 
 各OS用のファイルは、そのOS上でビルドする必要があります。手元にない OS 向けは、
-**GitHub に push して `v0.1.0` のようなタグをつける**と、`.github/workflows/release.yml` が
+**GitHub に push して `v1.0.0` のようなタグをつける**と、`.github/workflows/release.yml` が
 3 OS 分を自動でビルドして「Releases」ページに載せます（ダウンロードリンクをそのまま配れます）。
 
 注意：コード署名をしていないため、初回起動時に Windows は「WindowsによってPCが保護されました」（→「詳細情報」→「実行」）、
@@ -132,10 +132,11 @@ Mac は「開発元を確認できません」（→右クリックで「開く�
 - **勝手に入れ替えることはありません**（ダウンロードは「更新する」を押したときだけ。ダウンロード済みの更新は、アプリを閉じるときにも入れ替わります）
 - ダウンロードしたファイルは、更新の目録（`latest*.yml`）に書かれた sha512 の値と一致するか確認してから使います（ダウンロードの途中で壊れていないかの確認です。コード署名の代わりにはなりません）
 
-**新しい版を出す手順**
-1. `package.json` の `"version"` を上げる（例：`0.2.0`）
-2. 同じ数字のタグをつけて push する（例：`git tag v0.2.0 && git push origin v0.2.0`）
-3. GitHub Actions が3OS分のインストーラーと、更新の目録（`latest*.yml`）を Releases に載せます。使っている人のアプリが、自動で見つけます
+**このソフトから新しい版を出す手順**
+1. `package.json` と `package-lock.json` の版を同じ数字に更新します。
+2. アプリの「変更」画面でそのファイルを記録し、「アップロード」します。
+3. 「GitHub」→「リリース」→「リリースを作る」を開き、同じ数字の `v1.0.0` のようなバージョン名を入力して公開します。
+4. タグがGitHubに送られると、GitHub Actions が3OS分のインストーラーと更新の目録を作ってリリースに追加します。使っている人のアプリが、新しい版を見つけます。
 
 注意
 - タグと `package.json` の版がちがうと、Actions が止まります（更新が見つからなくなるのを防ぐため）

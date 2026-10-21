@@ -1,7 +1,7 @@
 {
   "name": "yasashii-git",
   "productName": "やさしいGit",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "初心者にもわかりやすい、全部日本語のGit/GitHubクライアント",
   "author": "yasashii-git",
   "main": "main.js",
@@ -84,6 +84,7 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Development",
+      "maintainer": "rumo-dev",
       "target": [
         "AppImage",
         "deb"
