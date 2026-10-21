@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>やさしいGit</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar" hidden>
+    <div class="brand"><span class="logo">🌱</span><span>やさしいGit</span></div>
+    <button id="repoSwitch" class="repo-switch" title="プロジェクトを切り替える"></button>
+    <nav id="nav"></nav>
+    <div class="sidebar-foot"><button class="link upd-link" id="updateLink" hidden></button><button class="link" id="glossaryBtn">📖 用語の対応表</button></div>
+  </aside>
+  <main id="main">
+    <div id="updateBanner" hidden></div>
+    <div id="inviteBanner" hidden></div>
+    <header id="topbar" hidden></header>
+    <div id="hint" hidden></div>
+    <section id="view"></section>
+  </main>
+</div>
+<div id="busy" hidden><div class="spinner"></div><div id="busyText">処理中…</div><div id="busyProg" hidden><div class="bar"><div id="busyBar"></div></div><div id="busyDetail" class="muted"></div></div></div>
+<div id="toasts"></div>
+<script src="i18n.js"></script>
+<script src="util.js"></script>
+<script src="graph.js"></script>
+<script src="ui.js"></script>
+<script src="view-changes.js"></script>
+<script src="view-history.js"></script>
+<script src="view-branches.js"></script>
+<script src="view-misc.js"></script>
+<script src="view-github.js"></script>
+<script src="view-settings.js"></script>
+<script src="view-team.js"></script>
+<script src="view-tasks.js"></script>
+<script src="view-inbox.js"></script>
+<script src="release.js"></script>
+<script src="login.js"></script>
+<script src="recovery.js"></script>
+<script src="updater.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

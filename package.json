@@ -1,0 +1,100 @@
+{
+  "name": "yasashii-git",
+  "productName": "やさしいGit",
+  "version": "0.1.0",
+  "description": "初心者にもわかりやすい、全部日本語のGit/GitHubクライアント",
+  "author": "yasashii-git",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/git.test.js && node test/updater.test.js && node test/auth.test.js && node test/release.test.js",
+    "test:ui": "python3 test/ui_login_upload.py && python3 test/ui_gituser.py && python3 test/ui_memo.py && python3 test/ui_safety.py && python3 test/ui_team.py && python3 test/ui_update_auth.py && python3 test/ui_inbox.py && python3 test/ui_release.py && python3 test/ui_smoke.py && python3 test/ui_gh_missing.py",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "jp.yasashii.git",
+    "productName": "やさしいGit",
+    "copyright": "MIT License",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "src/**/*",
+      "renderer/**/*",
+      "build/icon.png"
+    ],
+    "publish": null,
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "language": "1041",
+      "installerLanguages": [
+        "ja_JP"
+      ],
+      "shortcutName": "やさしいGit",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "yasashii-git-Setup-${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "yasashii-git-${version}-Mac-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Development",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "artifactName": "yasashii-git-${version}-Linux-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "yasashii-git-Portable-${version}-${arch}.${ext}"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}
