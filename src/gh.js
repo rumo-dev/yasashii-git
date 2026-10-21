@@ -304,6 +304,22 @@ async function closeIssue(cwd, number) { await run(['issue', 'close', String(num
 async function reopenIssue(cwd, number) { await run(['issue', 'reopen', String(number)], { cwd }); return true; }
 async function commentIssue(cwd, number, body) { await run(['issue', 'comment', String(number), '--body', body], { cwd }); return true; }
 
+/* ------------------------- やさしいGit フォーラム ------------------------- */
+const FEEDBACK_REPO = 'rumo-dev/yasashii-git';
+async function forumList(state = 'open') {
+  return json(['issue', 'list', '--repo', FEEDBACK_REPO, '--state', state, '--limit', '50', '--json', ISSUE_FIELDS]);
+}
+async function forumCreate({ category, title, body = '' } = {}) {
+  if (!title || !title.trim()) throw new GhError('タイトルを入力してください。', '');
+  const prefix = category === 'feature' ? '[要望] ' : category === 'other' ? '[相談] ' : '[バグ] ';
+  const r = await run(['issue', 'create', '--repo', FEEDBACK_REPO, '--title', prefix + title.trim(), '--body', body]);
+  return { url: (r.stdout.match(/https:\/\/\S+/) || [''])[0] };
+}
+async function forumComment(number, body) {
+  await run(['issue', 'comment', String(number), '--repo', FEEDBACK_REPO, '--body', body]);
+  return true;
+}
+
 
 /* ------------------------- タスク管理（Issueを「未着手／進行中／完了」で管理） ------------------------- */
 const DOING_LABEL = '進行中';
@@ -483,4 +499,5 @@ module.exports = {
   listReleases, createRelease,
   listPRs, viewPR, createPR, mergePR, closePR, reopenPR, checkoutPR, commentPR,
   listIssues, listTasks, setTaskStatus, assignTaskToMe, createTask, editTask, viewIssue, createIssue, closeIssue, reopenIssue, commentIssue,
+  forumList, forumCreate, forumComment,
 };

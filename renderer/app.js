@@ -17,6 +17,7 @@ const NAV = [
   { id: 'inbox', ico: '📬', label: '受信箱' },
   { id: 'team', ico: '👥', label: 'チーム' },
   { id: 'github', ico: '🐙', label: 'GitHub' },
+  { id: 'forum', ico: '💬', label: 'バグ報告・要望' },
   { id: 'settings', ico: '⚙️', label: '設定' },
 ];
 
@@ -143,6 +144,7 @@ function renderWelcome() {
       card('📂', 'フォルダを開く', jpEn('repository') + 'として、すでにあるフォルダを開きます', openFolderFlow),
       card('✨', '新しく作る', '空のフォルダから、変更を記録できるプロジェクトを作ります', initFlow),
       card('⬇️', 'ダウンロードして始める', '自分やチームのGitHubにあるプロジェクトを、一覧から選んでコピーします', () => cloneFlow()),
+      card('💬', 'バグ報告・要望', 'やさしいGitについて、アプリ内から質問や改善案を投稿します', openForum),
       card('🔗', 'リンクで参加', 'チームの人から送られたリンクを貼り付けて、いっしょに作業を始めます', joinByLink),
       card('📨', '招待を確認', S.inviteCount ? `${S.inviteCount} 件の招待が届いています！` : 'チームから届いた招待に「参加する」で返事をします', invitesDialog)),
     h('div', { class: 'card' },
@@ -391,7 +393,7 @@ function updateChrome() {
 }
 
 function go(id, force) {
-  if (!S.repo) return;
+  if (!S.repo && id !== 'forum') return;
   if (S.view === id && !force) { const v = Views[id]; if (v && v.onStatus) return; }
   S.view = id;
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.id === id));
@@ -399,6 +401,13 @@ function go(id, force) {
   container.scrollTop = 0;
   const v = Views[id];
   if (v) v.render(container);
+}
+
+function openForum() {
+  if (S.repo) return go('forum');
+  showShell(false);
+  S.view = 'forum';
+  Views.forum.render(clear($('#view')));
 }
 
 /* ------------------------------ 共通操作 ------------------------------ */

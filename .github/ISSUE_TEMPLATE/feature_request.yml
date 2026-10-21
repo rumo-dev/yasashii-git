@@ -1,0 +1,28 @@
+name: 機能の要望
+description: 追加してほしい機能や改善案を提案する
+title: "[要望] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        どんな場面で必要かも書いてもらえると、検討しやすくなります。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解決したいこと
+      description: いま困っていることや、手間に感じることを書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: こうなるとうれしい
+      description: 希望する動きや画面を教えてください。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: ほかに試した方法
+    validations:
+      required: false

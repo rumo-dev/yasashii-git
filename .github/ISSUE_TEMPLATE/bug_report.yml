@@ -1,0 +1,41 @@
+name: バグ報告
+description: やさしいGitで起きた問題を報告する
+title: "[バグ] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        できるだけ具体的に書いてください。個人情報やアクセストークンは記載しないでください。
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 起きたこと
+      description: どのような問題が起きましたか？
+      placeholder: 例：アップロードを押すとエラーが表示される
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 問題が起きるまでの操作を書いてください。
+      placeholder: |
+        1. 「…」を開く
+        2. 「…」を押す
+        3. エラーになる
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待していた動作
+      placeholder: 例：変更をGitHubにアップロードできる
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: アプリのバージョンとOS
+      placeholder: 例：0.1.0 / Windows 11
+    validations:
+      required: false
