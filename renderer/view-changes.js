@@ -5,6 +5,7 @@ Views.changes = (() => {
   let listsEl, opEl, diffHead, diffBody, commitBox, summaryEl, bodyEl, amendEl, commitBtn, commitPushBtn, counterEl, undoBtn;
   let diffToken = 0;
   const rangeState = { staged: { anchor: null, order: [] }, unstaged: { anchor: null, order: [] } };
+  const rangeSelection = { staged: new Set(), unstaged: new Set() };
   const draft = { summary: '', body: '', amend: false, auto: '', edited: false }; // auto=最後に自動で入れた下書き / edited=本人が書き換えたら true（以後は上書きしない）
   let autoEl;
 
@@ -119,12 +120,14 @@ Views.changes = (() => {
     const files = S.status.files;
     const staged = files.filter((f) => f.staged);
     const unstaged = files.filter((f) => f.unstaged && !f.conflict);
-    listsEl.appendChild(h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '✅ ', termLabel('stage', { text: '記録に含めるファイル' }), ` (${staged.length}) `, h('span', { class: 'muted', style: { fontSize: '11px', fontWeight: 400 } }, 'Shift＋クリックで範囲を外す')),
-      staged.length ? h('button', { class: 'btn small', onclick: unstageAll, title: hint('unstage') }, 'すべて外す') : null));
+    listsEl.appendChild(h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '✅ ', termLabel('stage', { text: '記録に含めるファイル' }), ` (${staged.length}) `, h('span', { class: 'muted', style: { fontSize: '11px', fontWeight: 400 } }, 'クリック後 Shift＋クリックで範囲選択')),
+      staged.length ? [rangeSelection.staged.size ? h('button', { class: 'btn small', onclick: () => applyRange('staged'), title: '選択したファイルを記録対象から外す' }, `選択を外す (${rangeSelection.staged.size})`) : null,
+        h('button', { class: 'btn small', onclick: unstageAll, title: hint('unstage') }, 'すべて外す')] : null));
     if (!staged.length) listsEl.appendChild(h('div', { class: 'empty', style: { padding: '14px' } }, '記録に含めるファイルはまだありません。'));
     staged.forEach((f) => listsEl.appendChild(fileRow(f, 'staged')));
-    listsEl.appendChild(h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '✏️ まだ含めていない変更', ` (${unstaged.length}) `, h('span', { class: 'muted', style: { fontSize: '11px', fontWeight: 400 } }, 'Shift＋クリックで範囲をステージ')),
-      unstaged.length ? [h('button', { class: 'btn small', onclick: stageAll }, 'すべて含める'),
+    listsEl.appendChild(h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '✏️ まだ含めていない変更', ` (${unstaged.length}) `, h('span', { class: 'muted', style: { fontSize: '11px', fontWeight: 400 } }, 'クリック後 Shift＋クリックで範囲選択')),
+      unstaged.length ? [rangeSelection.unstaged.size ? h('button', { class: 'btn small', onclick: () => applyRange('unstaged'), title: '選択したファイルを記録対象にする' }, `選択をステージ (${rangeSelection.unstaged.size})`) : null,
+        h('button', { class: 'btn small', onclick: stageAll }, 'すべて含める'),
         h('button', { class: 'btn small danger', onclick: discardAll, title: hint('discard') }, 'すべて破棄')] : null));
     if (!unstaged.length) listsEl.appendChild(h('div', { class: 'empty', style: { padding: '14px' } }, staged.length ? '他に変更はありません。' : '変更されたファイルはありません。'));
     unstaged.forEach((f) => listsEl.appendChild(fileRow(f, 'unstaged')));
@@ -135,12 +138,10 @@ Views.changes = (() => {
     const code = mode === 'staged' ? f.x : f.untracked ? '?' : f.y;
     const label = mode === 'staged' ? f.indexLabel : f.workLabel;
     const selected = sel && sel.path === f.path && sel.mode === mode;
+    const rangeSelected = rangeSelection[mode] && rangeSelection[mode].has(f.path);
     const blocked = mode === 'unstaged' && !!f.tooBig;   // 100MB超：記録に含められない
-    let shiftOnCheckbox = false;
-    const cb = h('input', { type: 'checkbox', checked: mode === 'staged', disabled: blocked, title: blocked ? '100MBを超えるため、そのままでは含められません（右の「対処を選ぶ」から）' : mode === 'staged' ? hint('unstage') : `${hint('stage')}（Shift＋クリックで範囲をまとめてステージ）`,
-      onpointerdown: (e) => { shiftOnCheckbox = e.shiftKey; },
-      onclick: (e) => { e.stopPropagation(); shiftOnCheckbox = shiftOnCheckbox || e.shiftKey; },
-      onchange: () => changeStage(f, mode, shiftOnCheckbox) });
+    const cb = h('input', { type: 'checkbox', checked: mode === 'staged', disabled: blocked, title: blocked ? '100MBを超えるため、そのままでは含められません（右の「対処を選ぶ」から）' : mode === 'staged' ? hint('unstage') : hint('stage'),
+      onclick: (e) => e.stopPropagation(), onchange: () => changeStage(f, mode) });
     const acts = h('div', { class: 'acts' });
     if (blocked) acts.appendChild(h('button', { class: 'btn small', onclick: (e) => { e.stopPropagation(); bigFileDialog(f); } }, '対処を選ぶ'));
     if (mode === 'unstaged') {
@@ -148,7 +149,7 @@ Views.changes = (() => {
       acts.appendChild(h('button', { class: 'btn small ghost', title: 'ファイルを開く', onclick: (e) => { e.stopPropagation(); APP('openFile', S.repo, f.path).catch(showError); } }, '↗'));
       acts.appendChild(h('button', { class: 'btn small ghost danger', title: '変更を戻す', onclick: (e) => { e.stopPropagation(); discardOne(f); } }, '🗑'));
     }
-    return h('div', { class: 'file-row' + (selected ? ' selected' : '') + (blocked ? ' blocked' : ''), title: blocked ? `${fmtSize(f.size)}：100MBを超えるため記録に含められません` : mode === 'unstaged' ? 'クリックで範囲選択の起点を設定。Shift＋クリックで範囲をステージします。' : f.orig ? `${f.orig} → ${f.path}` : f.path, onclick: (e) => { if (!blocked && (mode === 'staged' || mode === 'unstaged')) { if (e.shiftKey) changeStage(f, mode, true); else setRangeAnchor(f, mode); } select({ path: f.path, mode, untracked: f.untracked }); }, oncontextmenu: (e) => rowMenu(e, f, mode) },
+    return h('div', { class: 'file-row' + (selected ? ' selected' : '') + (rangeSelected ? ' range-selected' : '' ) + (blocked ? ' blocked' : ''), title: blocked ? `${fmtSize(f.size)}：100MBを超えるため記録に含められません` : mode === 'unstaged' ? 'クリックで起点を設定。Shift＋クリックで範囲選択し、右クリックまたはボタンでステージします。' : f.orig ? `${f.orig} → ${f.path}` : f.path, onclick: (e) => { if (!blocked && (mode === 'staged' || mode === 'unstaged')) { if (e.shiftKey) selectRange(f, mode); else { setRangeAnchor(f, mode); rangeSelection[mode].clear(); drawLists(); } } select({ path: f.path, mode, untracked: f.untracked }); }, oncontextmenu: (e) => rowMenu(e, f, mode) },
       cb, h('span', { class: 'st ' + code }, label || '変更'),
       h('span', { class: 'name' }, h('span', { class: 'dir' }, dir), base),
       blocked ? h('span', { class: 'pill red', title: '100MBを超えるファイルはGitHubに送れません' }, `🚫 ${fmtSize(f.size)}`) : f.lfs ? h('span', { class: 'pill blue', title: 'Git LFSで管理されます' }, 'LFS') : null, acts);
@@ -161,6 +162,7 @@ Views.changes = (() => {
       { label: '📄 ファイルを開く', disabled: gone, onclick: () => APP('openFile', S.repo, f.path).catch(showError) },
       { label: '📂 フォルダを開く', onclick: () => APP('showInFolder', S.repo, f.path).catch(showError) },
     ];
+    if ((mode === 'staged' || mode === 'unstaged') && !f.tooBig) items.push('sep', { label: mode === 'staged' ? `選択した ${rangeSelection.staged.size || 1} 個をステージから外す` : `選択した ${rangeSelection.unstaged.size || 1} 個をステージ`, onclick: () => rangeSelection[mode].size ? applyRange(mode) : changeStage(f, mode) });
     if (mode === 'unstaged' && !f.conflict) items.push('sep', f.untracked
       ? { label: '🚫 管理しない一覧に追加…', onclick: () => ignoreFile(f.path) }
       : { label: '🚫 管理しない一覧に追加（記録済みのファイルは対象外）', disabled: true });
@@ -169,6 +171,20 @@ Views.changes = (() => {
   }
 
   function select(s) { sel = s; drawOp(); drawLists(); loadDiff(); }
+
+  function selectRange(f, mode) {
+    const state = rangeState[mode];
+    const eligible = S.status.files.filter((x) => mode === 'staged' ? x.staged : x.unstaged && !x.conflict && !x.tooBig).map((x) => x.path);
+    const from = eligible.indexOf(state.anchor), to = eligible.indexOf(f.path);
+    if (from < 0 || to < 0) return;
+    rangeSelection[mode] = new Set(eligible.slice(Math.min(from, to), Math.max(from, to) + 1));
+  }
+  async function applyRange(mode) {
+    const paths = [...rangeSelection[mode]];
+    if (!paths.length) return;
+    const r = await G(mode === 'staged' ? 'unstage' : 'stage', paths).catch(showError);
+    if (r !== undefined) { rangeSelection[mode].clear(); await refreshAll(); }
+  }
 
   /* ----------------- 操作 ----------------- */
   async function changeStage(f, mode, useRange = false) {

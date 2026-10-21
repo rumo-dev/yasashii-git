@@ -128,6 +128,7 @@ label.check input { margin-top: 4px; }
 .file-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; border-bottom: 1px solid var(--border); -webkit-user-select: none; user-select: none; }
 .file-row:hover { background: var(--panel2); }
 .file-row.selected { background: var(--accent-bg); }
+.file-row.range-selected { outline: 1px solid var(--accent); outline-offset: -1px; background: var(--accent-bg); }
 .file-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-row .dir { color: var(--muted); }
 .file-row .acts { display: none; gap: 2px; }
