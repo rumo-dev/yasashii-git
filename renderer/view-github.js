@@ -1,7 +1,7 @@
 'use strict';
 /* 「GitHub」画面：ログイン・リポジトリ・変更の提案（PR）・課題（Issue） */
 Views.github = (() => {
-  let root, tab = 'account', auth = null, body, prState = 'open', issueState = 'open';
+  let root, tab = 'account', auth = null, body, prState = 'open', issueState = 'open', repoQuery = '';
 
   function render(container) { root = container; auth = null; draw(); }
   function onStatus() {}
@@ -60,11 +60,28 @@ Views.github = (() => {
     body.appendChild(h('div', { class: 'empty' }, '読み込み中…'));
     let list;
     try { list = await GH('listRepos'); } catch (e) { clear(body).appendChild(h('div', { class: 'card' }, e.message)); return; }
-    clear(body).appendChild(h('div', { class: 'list' }, list.length ? list.map((r) => h('div', { class: 'row' },
-      h('span', {}, r.isPrivate ? '🔒' : '📖'),
-      h('div', { class: 'grow' }, h('div', { class: 'title' }, h('b', {}, r.nameWithOwner), ' ', r.isFork ? h('span', { class: 'pill' }, 'フォーク') : null), h('div', { class: 'muted title', style: { fontSize: '12px' } }, r.description || '（説明なし）')),
-      h('span', { class: 'muted', style: { fontSize: '12px' } }, relTime(r.updatedAt)),
-      h('div', { class: 'btn-row' }, h('button', { class: 'btn small primary', onclick: () => cloneFlow(r.nameWithOwner) }, '⬇ ダウンロード'), h('button', { class: 'btn small', onclick: () => APP('openExternal', r.url) }, 'ブラウザで開く')))) : h('div', { class: 'empty' }, 'リポジトリがありません。')));
+    if (!root.isConnected) return;
+    clear(body);
+    const filter = h('input', { type: 'search', class: 'input', placeholder: '🔍 リポジトリ名・所有者・説明で検索', value: repoQuery, style: { width: '100%', maxWidth: '460px', marginBottom: '12px' } });
+    const listEl = h('div', {});
+    const drawList = () => {
+      repoQuery = filter.value;
+      const query = repoQuery.trim().toLocaleLowerCase();
+      const shown = list.filter((r) => !query || [r.nameWithOwner, r.owner, r.description].some((v) => String(v || '').toLocaleLowerCase().includes(query)));
+      clear(listEl);
+      if (!shown.length) {
+        listEl.appendChild(h('div', { class: 'empty' }, list.length ? '検索条件に一致するリポジトリがありません。' : 'リポジトリがありません。'));
+        return;
+      }
+      listEl.appendChild(h('div', { class: 'list' }, shown.map((r) => h('div', { class: 'row' },
+        h('span', {}, r.isPrivate ? '🔒' : '📖'),
+        h('div', { class: 'grow' }, h('div', { class: 'title' }, h('b', {}, r.nameWithOwner), ' ', r.isFork ? h('span', { class: 'pill' }, 'フォーク') : null), h('div', { class: 'muted title', style: { fontSize: '12px' } }, r.description || '（説明なし）')),
+        h('span', { class: 'muted', style: { fontSize: '12px' } }, relTime(r.updatedAt)),
+        h('div', { class: 'btn-row' }, h('button', { class: 'btn small primary', onclick: () => cloneFlow(r.nameWithOwner) }, '⬇ ダウンロード'), h('button', { class: 'btn small', onclick: () => APP('openExternal', r.url) }, 'ブラウザで開く'))))));
+    };
+    filter.addEventListener('input', drawList);
+    body.append(filter, listEl);
+    drawList();
   }
 
   /* ---------------- 変更の提案（PR） ---------------- */
