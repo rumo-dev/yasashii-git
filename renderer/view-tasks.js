@@ -129,8 +129,9 @@ Views.tasks = (() => {
 
   function taskBranch(t) {
     // Gitのブランチ名に使えない文字だけを整え、日本語を含むタイトルはそのまま残す。
-    let name = String(t.title || '').trim().replace(/\s+/g, '-').replace(/[\x00-\x20~^:?*\[\\]/g, '-').replace(/\.\./g, '-').replace(/@\{/g, '-');
-    name = name.replace(/^[./]+|[./]+$/g, '').replace(/\.lock$/i, '');
+    let name = String(t.title || '').trim().replace(/[\s\x00-\x20~^:?*\[\\/]/g, '-').replace(/\.\./g, '-').replace(/@\{/g, '-');
+    // Gitは先頭のハイフンもブランチ名として受け付けない。
+    name = name.replace(/^[.-]+|[.-]+$/g, '').replace(/\.lock$/i, '');
     return name || `issue-${t.number}`;
   }
 
