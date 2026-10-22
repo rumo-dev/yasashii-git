@@ -709,7 +709,7 @@ async function pull(repo, { allowUnrelated = false } = {}) {
   return { conflict: false, upToDate: /Already up to date/i.test(r.stdout) };
 }
 
-async function push(repo, { force = false, tags = false } = {}, onProgress) {
+async function push(repo, { force = false, tags = false, setUpstream = false } = {}, onProgress) {
   let st = await status(repo);
   const rs = await remotes(repo);
   if (!rs.length) throw new GitError('アップロード先（接続先）がまだありません。', '');
@@ -718,7 +718,7 @@ async function push(repo, { force = false, tags = false } = {}, onProgress) {
   const args = ['push', '--progress'];
   if (force) args.push('--force-with-lease');
   if (tags) args.push('--tags');
-  if (!st.upstream) {
+  if (setUpstream || !st.upstream) {
     const remote = (rs.find((r) => r.name === 'origin') || rs[0]).name;
     args.push('--set-upstream', remote, st.branch);
   }

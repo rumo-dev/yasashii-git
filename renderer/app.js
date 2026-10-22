@@ -616,7 +616,8 @@ async function publishToGitHub({ thenPush = false } = {}) {
   if (!made) return false;
   S.hasRemote = true;
   if (!thenPush) { await refreshAll(); toast('GitHubに作成しました 🎉'); return true; }
-  const ok = await withBusy('アップロード中…', () => G('push'));
+  // 新規作成直後は現在のブランチを origin に明示して初回 push し、追跡先を正しく結びつける。
+  const ok = await withBusy('アップロード中…', () => G('push', { setUpstream: true }));
   await refreshAll();
   if (ok) { toast('GitHubに作成して、アップロードしました 🎉'); return true; }
   return false;
