@@ -6,14 +6,15 @@ Views.settings = (() => {
   function onStatus() {}
 
   async function draw() {
-    let user, remotes, ignore;
-    try { [user, remotes, ignore] = await Promise.all([G('getUser'), G('remotes'), G('readIgnore')]); }
+    let user, remotes, ignore, ignoreTemplates;
+    try { [user, remotes, ignore, ignoreTemplates] = await Promise.all([G('getUser'), G('remotes'), G('readIgnore'), G('ignoreTemplates')]); }
     catch (e) { clear(root).appendChild(h('div', { class: 'pad' }, e.message)); return; }
 
     const nameIn = h('input', { type: 'text', value: user.name || user.globalName || '', placeholder: '例：山田 太郎' });
     const mailIn = h('input', { type: 'text', value: user.email || user.globalEmail || '', placeholder: 'you@example.com' });
     const globalChk = h('input', { type: 'checkbox', checked: true });
     const ignoreIn = h('textarea', { rows: 8, class: 'code-input', value: ignore, placeholder: '例：\nnode_modules/\n*.log\n.env' });
+    const ignoreTemplateSel = h('select', { style: { width: 'auto' } }, ignoreTemplates.map((t) => h('option', { value: t.value }, t.label)));
     const origChk = h('input', { type: 'checkbox', checked: S.settings.showOriginal !== false, onchange: () => saveSettings({ showOriginal: origChk.checked }).then(() => draw()) });
     const safetyChk = h('input', { type: 'checkbox', checked: S.settings.safetyCheck !== false, onchange: () => saveSettings({ safetyCheck: safetyChk.checked }).then(() => toast(safetyChk.checked ? '安全チェックをオンにしました' : '安全チェックをオフにしました')) });
     const minSel = h('select', { style: { width: 'auto' }, disabled: !S.settings.autoFetch, onchange: () => saveSettings({ autoFetchMin: Number(minSel.value) }) },
@@ -71,6 +72,13 @@ Views.settings = (() => {
 
       h('div', { class: 'card' }, h('h3', {}, '🚫 ', termLabel('gitignore')),
         h('p', { class: 'muted', style: { marginTop: 0 } }, '1行に1つ、記録したくないファイル名やフォルダ名を書きます。（パスワードを書いたファイルなどは必ず入れましょう）'),
+        h('div', { class: 'btn-row', style: { marginBottom: '8px' } },
+          ignoreTemplateSel,
+          h('button', { class: 'btn', onclick: async () => {
+            if (!ignoreTemplateSel.value || ignoreTemplateSel.value === 'none') return toast('テンプレートを選んでください。', 'error');
+            const result = await withBusy('テンプレートを追加中…', () => G('applyIgnoreTemplate', ignoreTemplateSel.value));
+            if (result) { ignoreIn.value = result.text; toast(result.added ? `${result.added} 件の設定を追加しました ✓` : 'テンプレートの設定はすでに含まれています'); }
+          } }, 'テンプレートを追加')),
         ignoreIn,
         h('div', { class: 'btn-row', style: { marginTop: '8px' } },
           h('button', { class: 'btn primary', onclick: async () => { const ok = await withBusy('保存中…', () => G('writeIgnore', ignoreIn.value)); if (ok) { toast('保存しました ✓'); refreshAll(); } } }, '保存'),

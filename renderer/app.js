@@ -196,7 +196,17 @@ async function initFlow() {
   if (!dir) return;
   const chk = await api.call('git', 'checkRepo', dir);
   if (chk.isRepo) { toast('このフォルダはすでにプロジェクトです。開きます。'); return openRepo(dir); }
-  await withBusy('プロジェクトを作成中…', async () => { await api.call('git', 'init', dir); });
+  const templates = await api.call('git', 'ignoreTemplates', dir);
+  const setup = await formDialog({ title: '新しいプロジェクト', okLabel: '作成する', intro: '最初に使う .gitignore テンプレートを選べます。あとから「設定」でも追加できます。', fields: [
+    { key: 'template', label: '.gitignore テンプレート', type: 'select', value: 'none', options: templates },
+  ] });
+  if (!setup) return;
+  try {
+    await withBusyThrow('プロジェクトを作成中…', async () => {
+      await api.call('git', 'init', dir);
+      if (setup.template !== 'none') await api.call('git', 'applyIgnoreTemplate', dir, setup.template);
+    });
+  } catch (e) { showError(e); return; }
   await openRepo(dir);
   toast('新しいプロジェクトを作りました 🎉');
 }

@@ -896,6 +896,34 @@ async function readIgnore(repo) {
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
 }
 async function writeIgnore(repo, text) { fs.writeFileSync(path.join(repo, '.gitignore'), text, 'utf8'); return true; }
+const IGNORE_TEMPLATES = {
+  node: { label: 'Node.js', lines: ['node_modules/', 'dist/', 'coverage/', '.env', '.env.*', '!.env.example', 'npm-debug.log*'] },
+  python: { label: 'Python', lines: ['__pycache__/', '*.py[cod]', '.venv/', 'venv/', 'env/', '.env', '*.egg-info/', 'dist/', 'build/', '.pytest_cache/'] },
+  visualstudio: { label: 'Visual Studio / .NET', lines: ['.vs/', 'bin/', 'obj/', 'TestResults/', '*.user', '*.suo'] },
+  unity: { label: 'Unity', lines: ['[Ll]ibrary/', '[Tt]emp/', '[Oo]bj/', '[Bb]uild/', '[Bb]uilds/', '[Ll]ogs/', 'UserSettings/'] },
+  java: { label: 'Java', lines: ['target/', 'build/', '.gradle/', '*.class', '.idea/'] },
+  rust: { label: 'Rust', lines: ['target/'] },
+  go: { label: 'Go', lines: ['/bin/', '*.exe', '*.test', '*.out'] },
+  web: { label: 'Web（共通）', lines: ['node_modules/', 'dist/', 'coverage/', '.env', '.env.*', '!.env.example'] },
+  windows: { label: 'Windows', lines: ['Thumbs.db', 'Thumbs.db:encryptable', 'ehthumbs.db', 'Desktop.ini', '$RECYCLE.BIN/'] },
+  macos: { label: 'macOS', lines: ['.DS_Store', '.AppleDouble', '.LSOverride', '._*', '.Spotlight-V100/', '.Trashes/'] },
+};
+async function ignoreTemplates(_repo) {
+  return [{ value: 'none', label: 'テンプレートを選ばない' }, ...Object.entries(IGNORE_TEMPLATES).map(([value, t]) => ({ value, label: t.label }))];
+}
+async function applyIgnoreTemplate(repo, key) {
+  const template = IGNORE_TEMPLATES[key];
+  if (!template) throw new GitError('テンプレートを選んでください。', String(key));
+  const current = await readIgnore(repo);
+  const lines = current.split(/\r?\n/);
+  const existing = new Set(lines);
+  const additions = template.lines.filter((line) => !existing.has(line));
+  if (!additions.length) return { added: 0, text: current };
+  const prefix = current && !current.endsWith('\n') ? current + '\n' : current;
+  const text = prefix + (current.trim() ? '\n' : '') + additions.join('\n') + '\n';
+  await writeIgnore(repo, text);
+  return { added: additions.length, text };
+}
 async function addIgnore(repo, pattern) {
   const cur = await readIgnore(repo);
   const lines = cur.split(/\r?\n/);
@@ -917,5 +945,5 @@ module.exports = {
   remotes, addRemote, removeRemote, setRemoteUrl, fetch, linkUpstream, prepareSync, pull, push,
   stashList, stashSave, stashApply, stashPop, stashDrop, stashDiff,
   tags, createTag, releaseDraft, deleteTag, pushTag, deleteRemoteTag,
-  getUser, setUser, setUserIfMissing, safetyCheck, readIgnore, writeIgnore, addIgnore,
+  getUser, setUser, setUserIfMissing, safetyCheck, readIgnore, writeIgnore, addIgnore, ignoreTemplates, applyIgnoreTemplate,
 };
