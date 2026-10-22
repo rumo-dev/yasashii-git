@@ -135,7 +135,7 @@ async function formDialog({ title, intro, fields, okLabel = 'OK', danger = false
   return modal({
     title, body, wide,
     buttons: [
-      { label: 'キャンセル', value: undefined },
+      { label: 'キャンセル', value: false },
       { label: okLabel, kind: danger ? 'danger-solid' : 'primary', value: collect,
         validate: () => { for (const f of fields) if (f.required && !String(inputs[f.key].value || '').trim()) return `「${f.label}」を入力してください。`; return null; } },
     ],
