@@ -2,7 +2,7 @@
 /* 「変更」画面：記録に含めるファイルの選択・変更内容の確認・記録（コミット） */
 Views.changes = (() => {
   let sel = null;               // { path, mode: 'staged'|'unstaged'|'conflict', untracked }
-  let listsEl, opEl, diffHead, diffBody, commitBox, summaryEl, bodyEl, amendEl, commitBtn, commitPushBtn, counterEl, undoBtn;
+  let listsEl, opEl, diffHead, diffBody, commitBox, layoutEl, summaryEl, bodyEl, amendEl, commitBtn, commitPushBtn, counterEl, undoBtn;
   let diffToken = 0;
   const rangeState = { staged: { anchor: null, order: [] }, unstaged: { anchor: null, order: [] } };
   const rangeSelection = { staged: new Set(), unstaged: new Set() };
@@ -14,27 +14,31 @@ Views.changes = (() => {
   function render(container) {
     listsEl = h('div', {}); opEl = h('div', {});
     summaryEl = h('input', { type: 'text', placeholder: '例：トップページの文言を修正', maxLength: 200, value: draft.summary, oninput: () => { draft.summary = summaryEl.value; draft.edited = true; updateCommit(); } });
-    bodyEl = h('textarea', { placeholder: 'くわしい説明（省略できます）', rows: 3, value: draft.body, oninput: () => { draft.body = bodyEl.value; } });
+    bodyEl = h('textarea', { class: 'commit-details', placeholder: 'くわしい説明（省略できます）', rows: 3, value: draft.body, oninput: () => { draft.body = bodyEl.value; } });
     counterEl = h('div', { class: 'counter' });
     autoEl = h('div', { class: 'auto-memo' });
     amendEl = h('input', { type: 'checkbox', checked: draft.amend, onchange: onAmend });
     commitBtn = h('button', { class: 'btn primary', style: { justifyContent: 'center' }, onclick: () => doCommit(false) });
     commitPushBtn = h('button', { class: 'btn commit-push', style: { justifyContent: 'center' }, title: '変更を記録して、そのままGitHubへアップロードします', onclick: () => doCommit(true) }, '⬆️ 記録して、そのままアップロード');
-    undoBtn = h('button', { class: 'link', title: '直前の記録をなかったことにします。ファイルの中身は変わらず、「記録に含める」状態に戻ります。', onclick: doUndo }, '↩ 直前の記録を取り消す（変更は残ります）');
+    undoBtn = h('button', { class: 'btn commit-undo', title: '直前の記録をなかったことにします。ファイルの中身は変わらず、「記録に含める」状態に戻ります。', onclick: doUndo }, '↩ 直前の記録を取り消す（変更は残ります）');
     commitBox = h('div', { class: 'commit-box' },
       h('div', { style: { fontWeight: 700 } }, '📝 ', termLabel('commit')),
-      h('div', {}, summaryEl, autoEl, counterEl),
+      h('div', { class: 'commit-summary-group' }, summaryEl, autoEl, counterEl),
       bodyEl,
-      h('label', { class: 'check', title: hint('amend') }, amendEl, h('span', {}, termLabel('amend'), h('span', { class: 'muted' }, '（まだアップロードしていない記録だけにしましょう）'))),
-      commitBtn, commitPushBtn, undoBtn);
-    diffHead = h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '変更内容'));
+      h('div', { class: 'commit-actions' },
+        h('label', { class: 'check commit-amend-control', title: hint('amend') }, amendEl, h('span', {}, termLabel('amend'), h('span', { class: 'muted' }, '（まだアップロードしていない記録だけにしましょう）'))),
+        commitBtn, commitPushBtn, undoBtn));
+    diffHead = h('div', { class: 'pane-head' }, h('span', { class: 'grow' }, '詳細'));
     diffBody = h('div', { style: { flex: 1, overflow: 'auto' } });
-    const split = h('div', { class: 'split changes' },
-      h('div', { class: 'pane changes-list-pane' }, opEl, listsEl, commitBox),
+    const workArea = h('div', { class: 'split changes' },
+      h('div', { class: 'pane changes-list-pane' }, opEl, listsEl),
       h('div', { class: 'splitter', role: 'separator', 'aria-orientation': 'vertical', title: 'ドラッグして幅を変更' }),
-      h('div', { class: 'pane' }, diffHead, diffBody));
-    container.appendChild(split);
-    setupSplitter(split);
+      h('div', { class: 'pane changes-detail-pane' }, diffHead, diffBody));
+    const rowSplitter = h('div', { class: 'changes-row-splitter', role: 'separator', 'aria-orientation': 'horizontal', title: 'ドラッグして変更一覧と記録欄の高さを調整' });
+    layoutEl = h('div', { class: 'changes-layout' }, workArea, rowSplitter, commitBox);
+    container.appendChild(layoutEl);
+    setupSplitter(workArea);
+    setupVerticalSplitter(layoutEl, rowSplitter);
     onStatus(true);
   }
 
@@ -56,6 +60,25 @@ Views.changes = (() => {
       const saved = Number(localStorage.getItem('changes-list-width'));
       if (saved >= 260) split.style.setProperty('--changes-list-width', `${saved}px`);
     } catch (_) { /* 保存領域が使えない場合は既定幅 */ }
+  }
+
+  function setupVerticalSplitter(layout, splitter) {
+    splitter.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); splitter.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        const rect = layout.getBoundingClientRect();
+        const height = Math.max(170, Math.min(rect.height - 170, rect.bottom - ev.clientY - 4));
+        layout.style.setProperty('--commit-height', `${height}px`);
+        try { localStorage.setItem('changes-commit-height', String(Math.round(height))); } catch (_) { /* 保存できなくても高さは変更できる */ }
+      };
+      const end = () => { splitter.removeEventListener('pointermove', move); splitter.removeEventListener('pointerup', end); };
+      splitter.addEventListener('pointermove', move);
+      splitter.addEventListener('pointerup', end);
+    });
+    try {
+      const saved = Number(localStorage.getItem('changes-commit-height'));
+      if (saved >= 170) layout.style.setProperty('--commit-height', `${Math.min(saved, Math.max(170, layout.clientHeight - 178))}px`);
+    } catch (_) { /* 保存領域が使えない場合は既定の高さ */ }
   }
 
   function onStatus(first) {
@@ -334,6 +357,7 @@ Views.changes = (() => {
     clear(commitBtn).append(amend ? '✏️ 直前の記録を修正する' : staged ? `✔ 変更を記録する（${staged}個のファイル）` : changes ? `✔ すべての変更を記録する（${changes}個）` : '✔ 変更を記録する');
     commitBtn.disabled = hasConflict || !summary || (!amend && !changes) || !!st.operation;
     commitBox.hidden = !!st.operation;
+    layoutEl.classList.toggle('operation', !!st.operation);
     undoBtn.hidden = !st.hasCommits || amend;
     commitPushBtn.disabled = commitBtn.disabled;
     commitPushBtn.hidden = amend;

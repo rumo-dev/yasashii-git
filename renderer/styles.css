@@ -117,6 +117,12 @@ label.check input { margin-top: 4px; }
 /* ---- 2ペイン ---- */
 .split { display: grid; height: 100%; min-height: 0; }
 .split.changes { grid-template-columns: minmax(260px, var(--changes-list-width, 360px)) 8px minmax(300px, 1fr); }
+.changes-layout { display: grid; grid-template-rows: minmax(160px, 1fr) 8px minmax(170px, var(--commit-height, 250px)); height: 100%; min-height: 0; }
+.changes-layout.operation { grid-template-rows: minmax(0, 1fr) 0 0; }
+.changes-layout.operation .changes-row-splitter { display: none; }
+.changes-row-splitter { cursor: row-resize; position: relative; touch-action: none; z-index: 2; background: var(--panel); }
+.changes-row-splitter::after { content: ''; position: absolute; left: 0; right: 0; top: 3px; height: 2px; background: var(--border); }
+.changes-row-splitter:hover::after, .changes-row-splitter:active::after { background: var(--accent); height: 3px; top: 2.5px; }
 .splitter { cursor: col-resize; position: relative; touch-action: none; z-index: 2; }
 .splitter::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: var(--border); }
 .splitter:hover::after, .splitter:active::after { background: var(--accent); width: 3px; left: 2.5px; }
@@ -136,7 +142,13 @@ label.check input { margin-top: 4px; }
 .st { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 4px; min-width: 52px; text-align: center; }
 .st.M { background: var(--info-bg); color: var(--info); } .st.A, .st.\? { background: var(--add-bg); color: var(--add-fg); }
 .st.D { background: var(--del-bg); color: var(--del-fg); } .st.R, .st.C, .st.T { background: var(--warn-bg); color: var(--warn); } .st.U { background: var(--danger-bg); color: var(--danger); }
-.commit-box { border-top: 1px solid var(--border); padding: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 8px; margin-top: auto; position: sticky; bottom: 0; }
+.commit-box { border-top: 1px solid var(--border); padding: 10px 12px; background: var(--panel); display: flex; flex-direction: column; gap: 6px; margin-top: 0; min-height: 0; overflow-y: auto; z-index: 1; }
+.commit-summary-group { position: sticky; top: 0; z-index: 2; background: var(--panel); padding: 2px 0; }
+.commit-details { max-height: 160px; }
+.commit-actions { display: grid; grid-template-columns: minmax(200px, 1.2fr) repeat(3, minmax(140px, 1fr)); gap: 8px; align-items: stretch; }
+.commit-actions > * { min-width: 0; white-space: normal; justify-content: center; }
+.commit-amend-control { border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; align-items: center !important; }
+.commit-undo { text-align: center; }
 .counter { font-size: 11px; color: var(--muted); text-align: right; }
 
 /* ---- 差分 ---- */
@@ -240,7 +252,10 @@ label.check input { margin-top: 4px; }
 .task-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 5px; font-size: 12px; }
 .task-acts { display: flex; align-items: center; gap: 4px; margin-top: 7px; }
 .task-body { white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow: auto; }
-@media (max-width: 900px) { .board { grid-template-columns: 1fr; } }
+@media (max-width: 900px) {
+  .board { grid-template-columns: 1fr; }
+  .commit-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .col-head .grow, .task-acts .grow { flex: 1; }
 
 /* 100MB超のファイル（記録に含められない） */
