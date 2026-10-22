@@ -11,8 +11,13 @@ if errorlevel 1 (
 )
 
 echo [1/2] 必要なものを準備しています...
-call npm install
-if errorlevel 1 ( echo [エラー] 準備に失敗しました。 & pause & exit /b 1 )
+call npm install --no-audit --no-fund --progress=true --loglevel=info --fetch-retries=2 --fetch-timeout=120000 --foreground-scripts
+if errorlevel 1 (
+  echo [エラー] 準備に失敗しました。
+  echo npmの詳しい記録は %LOCALAPPDATA%\npm-cache\_logs にあります。
+  pause
+  exit /b 1
+)
 
 echo [2/2] Windows用のインストーラーを作成しています。数分かかります...
 call npm run dist:win
