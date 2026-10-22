@@ -554,6 +554,193 @@ async function createBranch(repo, name, { from = null, switchTo = true } = {}) {
   return true;
 }
 
+/** GitFlowの基本分岐（本番用と開発用）を用意し、よく使われる接頭辞をローカル設定に保存 */
+async function initializeGitFlow(repo, { productionBranch, developmentBranch = 'develop' } = {}) {
+  const st = await status(repo);
+  if (!st.hasCommits) throw new GitError('GitFlowを始めるには、まず最初の変更を記録してください。', 'no commits');
+  if (st.detached) throw new GitError('過去の記録を見ている状態では初期化できません。「作業の分岐」から分岐に切り替えてください。', 'detached HEAD');
+  if (st.operation) throw new GitError('進行中の合流などを完了または中止してから、もう一度お試しください。', st.operation);
+  if (st.files.length) throw new GitError('作業中の変更があります。先に「一時退避」へ保存してから初期化してください。', 'working tree is not clean');
+
+  productionBranch = (productionBranch || '').trim();
+  developmentBranch = (developmentBranch || '').trim();
+  if (!productionBranch || !developmentBranch) throw new GitError('本番用と開発用の分岐を選んでください。', 'missing branch name');
+  await validateBranchName(repo, developmentBranch);
+  if (productionBranch === developmentBranch) throw new GitError('本番用と開発用には別々の分岐名を指定してください。', 'same branch name');
+
+  const current = await branches(repo);
+  if (!current.local.some((b) => b.name === productionBranch)) throw new GitError(`本番用の分岐「${productionBranch}」が見つかりません。`, productionBranch);
+  const exists = current.local.some((b) => b.name === developmentBranch);
+  const remoteMatches = current.remote.filter((b) => b.name.slice(b.name.indexOf('/') + 1) === developmentBranch);
+  if (!exists && remoteMatches.length) {
+    const remote = remoteMatches.find((b) => b.name.startsWith('origin/')) || remoteMatches[0];
+    await switchBranch(repo, remote.name, { remote: true });
+  } else {
+    if (!exists) await createBranch(repo, developmentBranch, { from: productionBranch, switchTo: false });
+    await switchBranch(repo, developmentBranch);
+  }
+
+  // git-flow-avh と互換性のあるローカル設定。既存の分岐名は変更しない。
+  const config = [
+    ['gitflow.branch.master', productionBranch],
+    ['gitflow.branch.develop', developmentBranch],
+    ['gitflow.prefix.feature', 'feature/'],
+    ['gitflow.prefix.release', 'release/'],
+    ['gitflow.prefix.hotfix', 'hotfix/'],
+    ['gitflow.prefix.support', 'support/'],
+    ['gitflow.prefix.versiontag', 'v'],
+  ];
+  for (const [key, value] of config) await run(['config', '--local', key, value], { cwd: repo });
+  return { productionBranch, developmentBranch, created: !exists && !remoteMatches.length, trackedRemote: !exists && remoteMatches.length > 0 };
+}
+
+async function gitFlowConfig(repo) {
+  const read = async (key) => {
+    const r = await run(['config', '--local', '--get', key], { cwd: repo, okCodes: [0, 1] });
+    return r.code === 0 ? r.stdout.trim() : '';
+  };
+  const productionBranch = await read('gitflow.branch.master');
+  const developmentBranch = await read('gitflow.branch.develop');
+  if (!productionBranch || !developmentBranch) return null;
+  return {
+    productionBranch, developmentBranch,
+    prefixes: {
+      feature: await read('gitflow.prefix.feature') || 'feature/',
+      release: await read('gitflow.prefix.release') || 'release/',
+      hotfix: await read('gitflow.prefix.hotfix') || 'hotfix/',
+      support: await read('gitflow.prefix.support') || 'support/',
+      versiontag: await read('gitflow.prefix.versiontag'),
+    },
+  };
+}
+
+async function beginGitFlowBranch(repo, { type, name, issueNumber } = {}) {
+  const config = await gitFlowConfig(repo);
+  if (!config) throw new GitError('先に「GitFlowを初期化」してください。', 'GitFlow is not initialized');
+  const st = await status(repo);
+  if (!st.hasCommits) throw new GitError('最初の変更を記録してから、GitFlowの分岐を作ってください。', 'no commits');
+  if (st.detached || st.operation) throw new GitError('過去の記録を見ている状態や、合流中には作成できません。分岐に戻るか、進行中の操作を完了してください。', st.operation || 'detached HEAD');
+  if (st.files.length) throw new GitError('作業中の変更があります。先に「一時退避」へ保存してください。', 'working tree is not clean');
+  if (!['feature', 'release', 'hotfix'].includes(type)) throw new GitError('feature、release、hotfixのいずれかを選んでください。', String(type));
+  const prefix = config.prefixes[type];
+  const rawName = (name || '').trim();
+  if (!rawName) throw new GitError('分岐の名前を入力してください。', 'missing branch name');
+  const branch = rawName.startsWith(prefix) ? rawName : prefix + rawName;
+  await validateBranchName(repo, branch);
+  const base = type === 'hotfix' ? config.productionBranch : config.developmentBranch;
+  const current = await branches(repo);
+  if (!current.local.some((b) => b.name === base)) throw new GitError(`開始元の分岐「${base}」が見つかりません。GitFlow設定を確認してください。`, base);
+  if (current.local.some((b) => b.name === branch) || current.remote.some((b) => b.name.slice(b.name.indexOf('/') + 1) === branch)) {
+    throw new GitError(`分岐「${branch}」はすでにあります。別の名前を使ってください。`, branch);
+  }
+  await createBranch(repo, branch, { from: base, switchTo: true });
+  if (issueNumber != null) await bindTaskBranch(repo, issueNumber, branch);
+  return { branch, base, type };
+}
+
+async function readTaskBranchMap(repo) {
+  const r = await run(['config', '--local', '--get', 'yasashiigit.task-branches'], { cwd: repo, okCodes: [0, 1] });
+  if (r.code !== 0 || !r.stdout.trim()) return {};
+  try { return JSON.parse(r.stdout.trim()); } catch (_) { return {}; }
+}
+
+async function writeTaskBranchMap(repo, map) {
+  const key = 'yasashiigit.task-branches';
+  if (Object.keys(map).length) await run(['config', '--local', '--replace-all', key, JSON.stringify(map)], { cwd: repo });
+  else await run(['config', '--local', '--unset-all', key], { cwd: repo, okCodes: [0, 1] });
+}
+
+async function bindTaskBranch(repo, issueNumber, branch) {
+  const key = String(issueNumber);
+  if (!/^\d+$/.test(key)) throw new GitError('課題番号を確認できません。', key);
+  const map = await readTaskBranchMap(repo);
+  map[key] = branch;
+  await writeTaskBranchMap(repo, map);
+  return branch;
+}
+
+async function getTaskBranch(repo, issueNumber) {
+  const branch = (await readTaskBranchMap(repo))[String(issueNumber)];
+  if (!branch) return null;
+  const current = await branches(repo);
+  return current.local.some((b) => b.name === branch) ? branch : null;
+}
+
+async function removeTaskBranchBinding(repo, branch) {
+  const map = await readTaskBranchMap(repo);
+  let changed = false;
+  for (const [issue, name] of Object.entries(map)) if (name === branch) { delete map[issue]; changed = true; }
+  if (changed) await writeTaskBranchMap(repo, map);
+}
+
+async function createTaskBranch(repo, { issueNumber, name } = {}) {
+  const st = await status(repo);
+  if (!st.hasCommits) throw new GitError('最初の変更を記録してから、タスクの分岐を作ってください。', 'no commits');
+  if (st.detached || st.operation) throw new GitError('過去の記録を見ている状態や、合流中にはタスクの分岐を作れません。', st.operation || 'detached HEAD');
+  if (st.files.length) throw new GitError('作業中の変更があります。先に「一時退避」へ保存してください。', 'working tree is not clean');
+  name = (name || '').trim();
+  await validateBranchName(repo, name);
+  const current = await branches(repo);
+  if (current.local.some((b) => b.name === name)) await switchBranch(repo, name);
+  else await createBranch(repo, name, { switchTo: true });
+  if (issueNumber != null) await bindTaskBranch(repo, issueNumber, name);
+  return { branch: name };
+}
+
+async function finishGitFlowBranch(repo, { branch, tagName } = {}) {
+  const config = await gitFlowConfig(repo);
+  if (!config) throw new GitError('先に「GitFlowを初期化」してください。', 'GitFlow is not initialized');
+  const st = await status(repo);
+  if (st.operation) throw new GitError('進行中の合流などを完了または中止してから、作業の分岐を完了してください。', st.operation);
+  if (st.files.length) throw new GitError('作業中の変更があります。先に記録するか、名前を付けて一時退避してください。', 'working tree is not clean');
+  branch = (branch || st.branch || '').trim();
+  if (!branch) throw new GitError('完了する作業の分岐を選んでください。', 'missing branch');
+  const local = await branches(repo);
+  if (!local.local.some((b) => b.name === branch)) throw new GitError(`手元に分岐「${branch}」が見つかりません。`, branch);
+  const kind = ['feature', 'release', 'hotfix'].find((type) => branch.startsWith(config.prefixes[type]));
+  if (!kind || branch.length <= config.prefixes[kind].length) throw new GitError('GitFlowのfeature、release、hotfix分岐ではありません。', branch);
+  const targets = kind === 'feature' ? [config.developmentBranch] : [config.productionBranch, config.developmentBranch];
+  if (targets.includes(branch)) throw new GitError('本番用・開発用の基本分岐はここから完了できません。', branch);
+  for (const target of targets) if (!local.local.some((b) => b.name === target)) throw new GitError(`取り込み先の分岐「${target}」が見つかりません。`, target);
+
+  let tag = null;
+  if (kind !== 'feature') {
+    const prefix = config.prefixes.versiontag;
+    const value = (tagName || '').trim();
+    if (!value) throw new GitError(`${kind === 'release' ? 'release' : 'hotfix'}の完了にはバージョンの目印が必要です。`, 'missing version tag');
+    tag = value.startsWith(prefix) ? value : prefix + value;
+    const refCheck = await run(['check-ref-format', `refs/tags/${tag}`], { cwd: repo, okCodes: [0, 1, 128] });
+    if (refCheck.code !== 0) throw new GitError('そのバージョン名は目印に使えません。', tag);
+    if ((await tags(repo)).some((item) => item.name === tag)) throw new GitError(`目印「${tag}」はすでにあります。別のバージョン名を入力してください。`, tag);
+  }
+
+  if ((await remotes(repo)).length) {
+    await fetch(repo);
+    const refreshed = await branches(repo);
+    for (const target of targets) {
+      const targetBranch = refreshed.local.find((b) => b.name === target);
+      if (targetBranch && targetBranch.behind > 0) {
+        throw new GitError(`取り込み先「${target}」にサーバー上の更新が ${targetBranch.behind} 件あります。先に「最新を取り込む」で更新してから、もう一度完了してください。`, target);
+      }
+    }
+    if (tag && (await tags(repo)).some((item) => item.name === tag)) throw new GitError(`目印「${tag}」はサーバーにすでにあります。別のバージョン名を入力してください。`, tag);
+  }
+
+  for (const target of targets) {
+    await switchBranch(repo, target);
+    const merged = await merge(repo, branch, { noFastForward: true });
+    if (merged && merged.conflict) return { conflict: true, branch, kind, target, targets };
+  }
+  if (tag) {
+    await switchBranch(repo, config.productionBranch);
+    await createTag(repo, tag, { message: `${kind}: ${branch}` });
+    await switchBranch(repo, config.developmentBranch);
+  }
+  await deleteBranch(repo, branch);
+  await removeTaskBranchBinding(repo, branch);
+  return { conflict: false, branch, kind, targets, tag };
+}
+
 async function switchBranch(repo, name, { remote = false } = {}) {
   if (remote) {
     const local = name.replace(/^[^/]+\//, '');
@@ -940,7 +1127,7 @@ module.exports = {
   stage, stageAll, unstage, unstageAll, discard,
   commit, undoLastCommit, lastCommitMessage,
   log, commitFiles, commitDiff, revertCommit, cherryPick, resetTo,
-  branches, createBranch, switchBranch, switchToCommit, deleteBranch, deleteRemoteBranch, renameBranch,
+  branches, createBranch, initializeGitFlow, gitFlowConfig, beginGitFlowBranch, finishGitFlowBranch, createTaskBranch, getTaskBranch, bindTaskBranch, removeTaskBranchBinding, switchBranch, switchToCommit, deleteBranch, deleteRemoteBranch, renameBranch,
   merge, abortOperation, continueOperation, resolveConflict, markResolved,
   remotes, addRemote, removeRemote, setRemoteUrl, fetch, linkUpstream, prepareSync, pull, push,
   stashList, stashSave, stashApply, stashPop, stashDrop, stashDiff,

@@ -101,19 +101,40 @@ Views.tasks = (() => {
   async function move(t, status) {
     const prev = t.status;
     if (status === 'doing' && prev !== 'doing') {
+      let flow, existingBranch;
+      try {
+        [flow, existingBranch] = await Promise.all([G('gitFlowConfig'), G('getTaskBranch', t.number)]);
+      } catch (e) { await showError(e); return; }
+      if (!existingBranch) {
+        try { existingBranch = await findTaskBranch(t, flow); } catch (e) { await showError(e); return; }
+      }
+      let flowType = null;
+      if (flow && !existingBranch) {
+        const choice = await formDialog({ title: 'GitFlowの作業の種類を選ぶ', okLabel: '次へ',
+          intro: '通常の機能追加はfeature、公開に向けた仕上げはrelease、本番環境の緊急修正はhotfixを選びます。',
+          fields: [{ key: 'type', label: '作業の種類', type: 'select', value: 'feature', options: [
+            { value: 'feature', label: 'feature（機能追加・通常の修正）' },
+            { value: 'release', label: 'release（公開前の仕上げ）' },
+            { value: 'hotfix', label: 'hotfix（公開済み機能の緊急修正）' },
+          ] }] });
+        if (!choice) return;
+        flowType = choice.type;
+      }
       const st = await G('status');
+      if (st.operation) { toast('進行中の合流などを完了または中止してから、タスクを進行中にしてください。', 'error'); return; }
+      let stashName = '';
       if (st.files.length) {
         const saved = await formDialog({ title: '作業中の変更を一時退避', okLabel: '退避して進む', intro: '別のタスクの変更があるため、先にスタッシュへ保存します。スタッシュ名を入力してください。', fields: [{ key: 'message', label: 'スタッシュ名', required: true, placeholder: t.title }] });
         if (!saved) return;
+        stashName = saved.message;
         try { await withBusyThrow('変更をしまっています…', () => G('stashSave', { message: saved.message, includeUntracked: true })); }
-        catch (e) { showError(e); return; }
+        catch (e) { await showError(e); toast(`変更は一時退避「${stashName}」に保存されたままです。`, 'error'); return; }
       }
-      const name = taskBranch(t);
       try {
-        const bs = await G('branches');
-        if (bs.local.some((b) => b.name === name)) await withBusyThrow('タスクの分岐へ切り替え中…', () => G('switchBranch', name));
-        else await withBusyThrow('タスクの分岐を作成中…', () => G('createBranch', name, { switchTo: true }));
-      } catch (e) { showError(e); return; }
+        if (existingBranch) await withBusyThrow('タスクの分岐へ切り替え中…', () => G('switchBranch', existingBranch));
+        else if (flowType) await withBusyThrow('GitFlowのタスク分岐を作成中…', () => G('beginGitFlowBranch', { type: flowType, name: taskBranch(t), issueNumber: t.number }));
+        else await withBusyThrow('タスクの分岐を作成中…', () => G('createTaskBranch', { name: taskBranch(t), issueNumber: t.number }));
+      } catch (e) { await showError(e); if (stashName) toast(`変更は一時退避「${stashName}」に保存されたままです。`, 'error'); return; }
     }
     if (status === 'done' && prev !== 'done') {
       try {
@@ -135,12 +156,43 @@ Views.tasks = (() => {
     return name || `issue-${t.number}`;
   }
 
+  async function findTaskBranch(t, flow) {
+    const expected = taskBranch(t);
+    const branches = (await G('branches')).local.map((b) => b.name);
+    const candidates = new Set(branches.filter((name) => name === expected));
+    if (flow) for (const type of ['feature', 'release', 'hotfix']) {
+      const name = flow.prefixes[type] + expected;
+      if (branches.includes(name)) candidates.add(name);
+    }
+    if (candidates.size !== 1) return null;
+    const branch = [...candidates][0];
+    await G('bindTaskBranch', t.number, branch);
+    return branch;
+  }
+
   async function finishTaskBranch(t) {
-    const branch = taskBranch(t);
+    const flow = await G('gitFlowConfig');
+    const branch = await G('getTaskBranch', t.number) || await findTaskBranch(t, flow) || taskBranch(t);
     const status = await G('status');
     const branches = await G('branches');
     if (!branches.local.some((b) => b.name === branch)) return true;
     if (status.files.length) throw new Error('未コミットの変更があります。変更を記録してから完了にしてください。');
+    const flowType = flow && ['feature', 'release', 'hotfix'].find((type) => branch.startsWith(flow.prefixes[type]) && branch.length > flow.prefixes[type].length);
+    if (flowType) {
+      let tagName = '';
+      if (flowType === 'release' || flowType === 'hotfix') {
+        const result = await formDialog({ title: `${flowType === 'release' ? 'リリース' : '緊急修正'}を完了`, okLabel: '合流して完了',
+          intro: `「${branch}」を本番用「${flow.productionBranch}」と開発用「${flow.developmentBranch}」に取り込み、バージョンの目印を付けます。`,
+          fields: [{ key: 'tag', label: 'バージョン（目印）', placeholder: '例：1.4.3', required: true,
+            help: flow.prefixes.versiontag ? `目印には「${flow.prefixes.versiontag}」が自動で付きます。` : '目印の名前に使うバージョンを入力してください。' }] });
+        if (!result) return false;
+        tagName = result.tag;
+      } else if (!await confirmDialog({ title: '機能の作業を完了しますか？', message: `「${branch}」を開発用「${flow.developmentBranch}」に取り込みます。`, okLabel: '合流して完了' })) return false;
+      const finished = await withBusyThrow('最新の状態を確認して、GitFlowの変更を取り込み中…', () => G('finishGitFlowBranch', { branch, tagName }));
+      if (finished && finished.conflict) { await afterConflictCheck(finished, null); return false; }
+      if (finished) return true;
+      return false;
+    }
     await withBusyThrow('サーバーの更新を確認中…', () => G('fetch'));
     const refreshed = await G('branches');
     const candidates = refreshed.local.filter((b) => b.name !== branch && b.upstream);
@@ -158,6 +210,7 @@ Views.tasks = (() => {
     const merged = await withBusyThrow('タスクの変更を取り込み中…', () => G('merge', branch));
     if (merged && merged.conflict) throw new Error('取り込みで競合が発生しました。競合を解決してから、もう一度完了にしてください。');
     await withBusyThrow('タスクの分岐を削除中…', () => G('deleteBranch', branch));
+    await G('removeTaskBranchBinding', branch);
     return true;
   }
   async function createTask(status) {
