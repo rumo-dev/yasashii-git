@@ -1,7 +1,7 @@
 'use strict';
 /* 「タスク」画面：GitHubの課題（Issue）を「未着手／進行中／完了」のボードで管理する */
 Views.tasks = (() => {
-  let root, tasks = null, me = null, onlyMine = false, token = 0;
+  let root, tasks = null, me = null, onlyMine = false, searchText = '', priorityFilter = 'all', sortBy = 'priority', token = 0;
   const COLS = [
     { id: 'todo', ico: '📋', label: '未着手', hint: 'まだ取りかかっていないタスク' },
     { id: 'doing', ico: '🚧', label: '進行中', hint: 'いま取りかかっているタスク（GitHubでは「進行中」ラベルが付きます）' },
@@ -29,7 +29,21 @@ Views.tasks = (() => {
   const mine = (t) => !!me && (t.assignees || []).some((a) => a.login === me);
 
   function paint() {
-    const shown = tasks.filter((t) => !onlyMine || mine(t));
+    const rank = { high: 0, normal: 1, low: 2 };
+    const shown = tasks.filter((t) => {
+      if (onlyMine && !mine(t)) return false;
+      if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
+      const query = searchText.trim().toLocaleLowerCase();
+      if (!query) return true;
+      const haystack = [t.title, t.body, `#${t.number}`, ...(t.labels || []).map((l) => l.name), ...(t.assignees || []).map((a) => a.login)].join(' ').toLocaleLowerCase();
+      return haystack.includes(query);
+    }).sort((a, b) => {
+      if (sortBy === 'priority') return (rank[a.priority] ?? 1) - (rank[b.priority] ?? 1) || new Date(b.createdAt) - new Date(a.createdAt);
+      if (sortBy === 'updated') return new Date(b.updatedAt) - new Date(a.updatedAt);
+      if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+      if (sortBy === 'comments') return (b.comments || 0) - (a.comments || 0);
+      return a.title.localeCompare(b.title, 'ja');
+    });
     const total = shown.length, done = shown.filter((t) => t.status === 'done').length;
     const pct = total ? Math.round(done * 100 / total) : 0;
     clear(root).appendChild(h('div', { class: 'pad tasks' },
@@ -38,6 +52,9 @@ Views.tasks = (() => {
           h('p', { class: 'sub' }, 'GitHubの課題（Issue）をそのままタスクとして管理します。カードをドラッグするか、「→」で次の状態へ進められます。')),
         h('div', { class: 'btn-row' },
           h('label', { class: 'check', style: { margin: 0 } }, h('input', { type: 'checkbox', checked: onlyMine, onchange: (e) => { onlyMine = e.target.checked; paint(); } }), h('span', {}, '自分の担当だけ')),
+          h('input', { class: 'input', type: 'search', placeholder: 'タイトル・内容・担当・ラベル・番号で検索', value: searchText, style: { width: '250px' }, onchange: (e) => { searchText = e.target.value; paint(); }, onkeydown: (e) => { if (e.key === 'Enter') { searchText = e.target.value; paint(); } } }),
+          h('select', { class: 'input', value: priorityFilter, style: { width: 'auto' }, onchange: (e) => { priorityFilter = e.target.value; paint(); } }, [['all', 'すべての緊急度'], ['high', '🔴 高'], ['normal', '🟡 中'], ['low', '🟢 低']].map(([v, label]) => h('option', { value: v, selected: v === priorityFilter }, label))),
+          h('select', { class: 'input', value: sortBy, style: { width: 'auto' }, onchange: (e) => { sortBy = e.target.value; paint(); } }, [['priority', '緊急度順'], ['updated', '更新が新しい順'], ['oldest', '作成が古い順'], ['title', '名前順'], ['comments', 'コメントが多い順']].map(([v, label]) => h('option', { value: v, selected: v === sortBy }, label))),
           h('button', { class: 'btn', onclick: () => draw(false) }, '🔄 更新'),
           h('button', { class: 'btn primary', onclick: () => createTask('todo') }, '＋ タスクを追加'))),
       h('div', { class: 'task-progress', title: `${done} / ${total} 完了` },
@@ -68,6 +85,7 @@ Views.tasks = (() => {
       h('div', { class: 'task-title' }, h('span', { class: 'muted' }, `#${t.number} `), t.title),
       labels.length ? h('div', { class: 'task-meta' }, labels.map((l) => h('span', { class: 'pill blue' }, l.name))) : null,
       h('div', { class: 'task-meta' },
+        h('span', { class: 'pill ' + (t.priority === 'high' ? 'red' : t.priority === 'low' ? 'green' : 'yellow') }, ({ high: '🔴 緊急度：高', normal: '🟡 緊急度：中', low: '🟢 緊急度：低' })[t.priority] || '🟡 緊急度：中'),
         (t.assignees || []).length ? h('span', { class: 'pill ' + (mine(t) ? 'green' : '') }, '👤 ' + t.assignees.map((a) => a.login).join(', ')) : h('span', { class: 'muted' }, '担当なし'),
         t.comments ? h('span', { class: 'muted' }, `💬 ${t.comments}`) : null),
       h('div', { class: 'task-acts' },
@@ -82,11 +100,57 @@ Views.tasks = (() => {
   /* ----------------- 操作 ----------------- */
   async function move(t, status) {
     const prev = t.status;
+    if (status === 'doing' && prev !== 'doing') {
+      const st = await G('status');
+      if (st.files.length) {
+        const saved = await formDialog({ title: '作業中の変更を一時退避', okLabel: '退避して進む', intro: '別のタスクの変更があるため、先にスタッシュへ保存します。スタッシュ名を入力してください。', fields: [{ key: 'message', label: 'スタッシュ名', required: true, placeholder: t.title }] });
+        if (!saved) return;
+        try { await withBusyThrow('変更をしまっています…', () => G('stashSave', { message: saved.message, includeUntracked: true })); }
+        catch (e) { showError(e); return; }
+      }
+      const name = taskBranch(t);
+      try {
+        const bs = await G('branches');
+        if (bs.local.some((b) => b.name === name)) await withBusyThrow('タスクの分岐へ切り替え中…', () => G('switchBranch', name));
+        else await withBusyThrow('タスクの分岐を作成中…', () => G('createBranch', name, { switchTo: true }));
+      } catch (e) { showError(e); return; }
+    }
+    if (status === 'done' && prev !== 'done') {
+      try {
+        await finishTaskBranch(t);
+      } catch (e) { showError(e); return; }
+    }
     t.status = status;                        // 先に画面へ反映（早く見える）
     paint();
     const r = await withBusy('更新中…', () => GH('setTaskStatus', S.repo, t.number, status, { state: t.state, doing: prev === 'doing' }));
     if (r === undefined) t.status = prev;     // 失敗したら元に戻す
     await draw(false);
+  }
+
+  function taskBranch(t) {
+    // Gitのブランチ名に使えない文字だけを整え、日本語を含むタイトルはそのまま残す。
+    let name = String(t.title || '').trim().replace(/\s+/g, '-').replace(/[\x00-\x20~^:?*\[\\]/g, '-').replace(/\.\./g, '-').replace(/@\{/g, '-');
+    name = name.replace(/^[./]+|[./]+$/g, '').replace(/\.lock$/i, '');
+    return name || `issue-${t.number}`;
+  }
+
+  async function finishTaskBranch(t) {
+    const branch = taskBranch(t);
+    const status = await G('status');
+    const branches = await G('branches');
+    if (!branches.local.some((b) => b.name === branch)) return;
+    if (status.files.length) throw new Error('未コミットの変更があります。変更を記録してから完了にしてください。');
+    await withBusyThrow('サーバーの更新を確認中…', () => G('fetch'));
+    const refreshed = await G('branches');
+    const bases = ['main', 'master', 'develop'];
+    const base = bases.find((n) => refreshed.local.some((b) => b.name === n && b.upstream));
+    if (!base) throw new Error('取り込み先（main / master / develop）の追跡先が見つかりません。分岐を更新してから完了してください。');
+    const target = refreshed.local.find((b) => b.name === base);
+    if (target.behind > 0) throw new Error(`「${base}」にサーバー上の更新が ${target.behind} 件あります。先に「最新を取り込む」で更新してから完了してください。`);
+    await withBusyThrow('取り込み先へ切り替え中…', () => G('switchBranch', base));
+    const merged = await withBusyThrow('タスクの変更を取り込み中…', () => G('merge', branch));
+    if (merged && merged.conflict) throw new Error('取り込みで競合が発生しました。競合を解決してから、もう一度完了にしてください。');
+    await withBusyThrow('タスクの分岐を削除中…', () => G('deleteBranch', branch));
   }
   async function createTask(status) {
     const r = await formDialog({ title: '＋ タスクを追加', okLabel: '追加する',
@@ -95,6 +159,7 @@ Views.tasks = (() => {
         { key: 'title', label: 'タスクの名前', required: true, placeholder: '例：トップページの写真を差し替える' },
         { key: 'body', label: 'くわしい内容（省略できます）', type: 'textarea', rows: 5 },
         { key: 'status', label: '最初の状態', type: 'select', value: status, options: COLS.slice(0, 2).map((c) => ({ value: c.id, label: `${c.ico} ${c.label}` })) },
+        { key: 'priority', label: '緊急度', type: 'select', value: 'normal', options: [{ value: 'high', label: '🔴 高（急いで対応）' }, { value: 'normal', label: '🟡 中（通常）' }, { value: 'low', label: '🟢 低（余裕あり）' }] },
         { key: 'assignMe', label: '担当を自分にする', type: 'checkbox', value: false }] });
     if (!r) return;
     if (await withBusy('追加中…', () => GH('createTask', S.repo, r))) { toast('追加しました ✓'); draw(false); }

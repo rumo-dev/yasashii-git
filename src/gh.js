@@ -323,6 +323,7 @@ async function forumComment(number, body) {
 
 /* ------------------------- タスク管理（Issueを「未着手／進行中／完了」で管理） ------------------------- */
 const DOING_LABEL = '進行中';
+const PRIORITY_LABELS = { high: '緊急度:高', normal: '緊急度:中', low: '緊急度:低' };
 const TASK_FIELDS = 'number,title,author,state,url,labels,assignees,createdAt,updatedAt,closedAt,comments,body';
 /** 「進行中」の目印（ラベル）がなければ作る。あれば何もしない */
 async function ensureDoingLabel(cwd) {
@@ -334,7 +335,9 @@ async function listTasks(cwd) {
   return (list || []).map((i) => {
     const doing = (i.labels || []).some((l) => l.name === DOING_LABEL);
     const status = i.state === 'CLOSED' ? 'done' : doing ? 'doing' : 'todo';
-    return { ...i, status, comments: (i.comments || []).length };
+    const priorityLabel = (i.labels || []).find((l) => Object.values(PRIORITY_LABELS).includes(l.name));
+    const priority = Object.keys(PRIORITY_LABELS).find((key) => PRIORITY_LABELS[key] === (priorityLabel && priorityLabel.name)) || 'normal';
+    return { ...i, status, priority, comments: (i.comments || []).length };
   });
 }
 /** cur: { state: 'OPEN'|'CLOSED', doing: boolean }（今の状態。余計な操作をしないために使う） */
@@ -359,11 +362,14 @@ async function assignTaskToMe(cwd, number, on = true) {
   await run(['issue', 'edit', String(Number(number)), on ? '--add-assignee' : '--remove-assignee', '@me'], { cwd });
   return true;
 }
-async function createTask(cwd, { title, body = '', status = 'todo', assignMe = false } = {}) {
+async function createTask(cwd, { title, body = '', status = 'todo', priority = 'normal', assignMe = false } = {}) {
   if (!title || !title.trim()) throw new GhError('タイトルを入力してください。', '');
   const args = ['issue', 'create', '--title', title.trim(), '--body', body];
   if (assignMe) args.push('--assignee', '@me');
   if (status === 'doing') { await ensureDoingLabel(cwd); args.push('--label', DOING_LABEL); }
+  const priorityLabel = PRIORITY_LABELS[priority] || PRIORITY_LABELS.normal;
+  await run(['label', 'create', priorityLabel, '--color', priority === 'high' ? 'd73a4a' : priority === 'low' ? '0e8a16' : 'fbca04', '--description', 'タスクの緊急度', '--force'], { cwd });
+  args.push('--label', priorityLabel);
   const r = await run(args, { cwd });
   return { url: (r.stdout.match(/https:\/\/\S+/) || [''])[0] };
 }
