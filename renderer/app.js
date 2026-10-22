@@ -156,7 +156,34 @@ function renderWelcome() {
     S.recent.length ? h('div', {}, h('h3', {}, '最近使ったプロジェクト'),
       h('div', { class: 'list' }, S.recent.map((d) => h('div', { class: 'row clickable', onclick: () => openRepo(d) },
         h('span', {}, '📁'), h('div', { class: 'grow' }, h('div', { class: 'title' }, d.split(/[\\/]/).pop()), h('div', { class: 'muted', style: { fontSize: '12px' } }, d)),
-        h('button', { class: 'btn small ghost', title: '一覧から外す', onclick: async (e) => { e.stopPropagation(); S.recent = await APP('removeRecent', d); renderWelcome(); } }, '✕'))))) : null));
+        h('button', { class: 'btn small ghost', title: 'プロジェクトを削除', onclick: (e) => { e.stopPropagation(); removeProject(d); } }, '削除'))))) : null));
+}
+
+async function removeProject(dir, fromSwitcher = false) {
+  const choice = await modal({ title: 'プロジェクトを削除', body: h('div', {},
+    h('p', {}, `「${dir.split(/[\\/]/).pop()}」を一覧から削除します。`),
+    h('p', { class: 'muted' }, '一覧から外すと、パソコン内のフォルダとファイルは残ります。フォルダごと削除すると、中のファイルもすべて削除されます。')),
+    buttons: [
+      { label: 'キャンセル', value: 'cancel' },
+      { label: '一覧から外す（フォルダを残す）', value: 'remove' },
+      { label: 'フォルダごと削除…', kind: 'danger', value: 'delete' },
+    ] });
+  if (!choice || choice === 'cancel') return;
+  if (choice === 'delete') {
+    const ok = await confirmDialog({ title: 'フォルダと中身を削除します', message: `次のフォルダをパソコンから完全に削除します。この操作は元に戻せません。\n\n${dir}`, okLabel: 'フォルダごと削除する' });
+    if (!ok) return;
+  }
+  try {
+    S.recent = await withBusyThrow(choice === 'delete' ? 'プロジェクトのフォルダを削除中…' : '一覧から外しています…', () => choice === 'delete' ? APP('deleteProject', dir) : APP('removeRecent', dir));
+    if (S.repo && S.repo.toLowerCase() === dir.toLowerCase()) {
+      S.repo = null; S.repoName = ''; S.status = null; S.hasRemote = false; S.sig = '';
+      document.querySelector('.overlay')?.remove();
+      renderWelcome();
+    } else if (fromSwitcher) {
+      document.querySelector('.overlay')?.remove();
+      repoSwitcher();
+    } else renderWelcome();
+  } catch (e) { showError(e); }
 }
 
 async function openFolderFlow() {
@@ -284,7 +311,8 @@ async function checkSshRemote() {
 
 async function repoSwitcher() {
   const body = h('div', {}, h('div', { class: 'list' }, S.recent.map((d) => h('div', { class: 'row clickable' + (d === S.repo ? ' selected' : ''), onclick: () => { document.querySelector('.overlay').remove(); openRepo(d); } },
-    h('span', {}, '📁'), h('div', { class: 'grow' }, h('div', {}, d.split(/[\\/]/).pop()), h('div', { class: 'muted', style: { fontSize: '12px' } }, d))))));
+    h('span', {}, '📁'), h('div', { class: 'grow' }, h('div', {}, d.split(/[\\/]/).pop()), h('div', { class: 'muted', style: { fontSize: '12px' } }, d)),
+    h('button', { class: 'btn small ghost', title: 'プロジェクトを削除', onclick: (e) => { e.stopPropagation(); removeProject(d, true); } }, '削除')))));
   const r = await modal({ title: 'プロジェクトを切り替える', body, buttons: [{ label: '閉じる', value: 'x' }, { label: '📂 フォルダを開く', value: 'open' }, { label: '✨ 新しく作る', value: 'init' }, { label: '⬇️ ダウンロード', value: 'clone' }] });
   if (r === 'open') openFolderFlow(); else if (r === 'init') initFlow(); else if (r === 'clone') cloneFlow();
 }

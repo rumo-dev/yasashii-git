@@ -50,6 +50,20 @@ const appApi = {
     if (s.lastRepo === dir) s.lastRepo = null;
     writeStore(s); return s.recent;
   },
+  async deleteProject(dir) {
+    const s = readStore();
+    const target = path.resolve(dir);
+    if (!s.recent.some((d) => path.resolve(d) === target)) throw new Error('最近使ったプロジェクト一覧にないフォルダは削除できません。');
+    const stat = fs.lstatSync(target);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || target === path.parse(target).root) throw new Error('安全のため、このフォルダは削除できません。');
+    const repo = await git.checkRepo(target);
+    if (!repo.isRepo || path.resolve(repo.root) !== target) throw new Error('Gitプロジェクトのフォルダを確認できません。削除を中止しました。');
+    fs.rmSync(target, { recursive: true, force: false });
+    s.recent = s.recent.filter((d) => path.resolve(d) !== target);
+    if (s.lastRepo && path.resolve(s.lastRepo) === target) s.lastRepo = null;
+    writeStore(s);
+    return s.recent;
+  },
   async openExternal(url) {
     if (!/^https:\/\//i.test(url)) throw new Error('https のURLだけ開けます。');
     await shell.openExternal(url); return true;
