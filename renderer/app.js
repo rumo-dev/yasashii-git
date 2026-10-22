@@ -120,7 +120,7 @@ const G_check = async (dir) => { try { const r = await api.call('git', 'checkRep
 function applySettings() {
   settingsRef.showOriginal = S.settings.showOriginal !== false;
   const t = S.settings.theme;
-  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  if (t && t !== 'auto') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
 }
 async function saveSettings(patch) { S.settings = await APP('setSettings', patch); applySettings(); buildNav(); updateChrome(); }
 

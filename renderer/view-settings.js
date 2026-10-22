@@ -20,8 +20,25 @@ Views.settings = (() => {
     const minSel = h('select', { style: { width: 'auto' }, disabled: !S.settings.autoFetch, onchange: () => saveSettings({ autoFetchMin: Number(minSel.value) }) },
       [1, 3, 5, 10, 30].map((m) => h('option', { value: m, selected: (Number(S.settings.autoFetchMin) || 5) === m }, m + '分ごと')));
     const autoChk = h('input', { type: 'checkbox', checked: !!S.settings.autoFetch, onchange: () => { minSel.disabled = !autoChk.checked; saveSettings({ autoFetch: autoChk.checked }).then(() => toast(autoChk.checked ? '定期的な更新確認をオンにしました' : '定期的な更新確認をオフにしました')); } });
-    const themeSel = h('select', { style: { width: 'auto' }, onchange: () => saveSettings({ theme: themeSel.value }) },
-      [['auto', '自動（パソコンの設定に合わせる）'], ['light', 'ライト'], ['dark', 'ダーク']].map(([v, l]) => h('option', { value: v, selected: (S.settings.theme || 'auto') === v }, l)));
+    const themes = [
+      { id: 'auto', name: 'システムに合わせる', colors: ['#f6f7f9', '#ffffff', '#2f7d5b'] },
+      { id: 'light', name: 'リーフ', colors: ['#f6f7f9', '#ffffff', '#2f7d5b'] },
+      { id: 'dark', name: 'ダーク', colors: ['#14171a', '#1c2024', '#4cb386'] },
+      { id: 'ocean', name: 'オーシャン', colors: ['#eaf4fb', '#f8fcff', '#1677c8'] },
+      { id: 'sakura', name: 'さくら', colors: ['#fff0f5', '#fffafd', '#d94f83'] },
+      { id: 'lavender', name: 'ラベンダー', colors: ['#f1effb', '#fbfaff', '#7958c8'] },
+      { id: 'sunset', name: 'サンセット', colors: ['#fff1e5', '#fffaf5', '#d56a32'] },
+      { id: 'forest', name: 'フォレスト', colors: ['#111a17', '#19241f', '#73c99a'] },
+      { id: 'midnight', name: 'ミッドナイト', colors: ['#151522', '#1d1d2c', '#9b8cff'] },
+      { id: 'nord', name: 'ノルド', colors: ['#2e3440', '#3b4252', '#88c0d0'] },
+    ];
+    const currentTheme = S.settings.theme || 'auto';
+    const themeOptions = h('div', { class: 'theme-options', role: 'group', 'aria-label': 'テーマを選択' }, themes.map((t) =>
+      h('button', { type: 'button', class: `theme-option${currentTheme === t.id ? ' selected' : ''}`, 'aria-pressed': currentTheme === t.id, title: t.name,
+        onclick: async () => { await saveSettings({ theme: t.id }); draw(); } },
+        h('span', { class: 'theme-preview', style: { background: t.colors[0] } },
+          h('i', { style: { background: t.colors[1] } }), h('i', { style: { background: t.colors[2] } })),
+        h('span', {}, t.name))));
 
     const updChk = h('input', { type: 'checkbox', checked: S.settings.autoUpdateCheck !== false, onchange: () => saveSettings({ autoUpdateCheck: updChk.checked }).then(() => toast(updChk.checked ? '新しい版の自動確認をオンにしました' : '新しい版の自動確認をオフにしました')) });
     const updStatus = h('div', { class: 'muted', style: { marginBottom: '10px' } });
@@ -97,7 +114,7 @@ Views.settings = (() => {
 
       h('div', { class: 'card' }, h('h3', {}, '🎨 表示'),
         h('label', { class: 'check', style: { marginBottom: '10px' } }, origChk, h('span', {}, 'やさしい言い方のとなりに、元のGit用語も小さく表示する', h('div', { class: 'muted', style: { fontSize: '12px' } }, '例：アップロード push　──　他の資料やチームの会話で使われる用語を、自然に覚えられます。'))),
-        h('label', { class: 'field' }, h('span', {}, 'テーマ'), themeSel),
+        h('div', { class: 'field' }, h('span', {}, 'テーマ'), themeOptions),
         h('button', { class: 'btn', onclick: showGlossary }, '📖 用語の対応表を見る')),
 
       h('p', { class: 'muted', style: { fontSize: '12px' } }, 'やさしいGit  v' + (S.version || ''))));
