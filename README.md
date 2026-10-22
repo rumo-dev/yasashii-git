@@ -4,7 +4,7 @@
 
 「commit」は「変更を記録」、「push」は「アップロード」のように、難しい用語を普段の言葉に置き換えています。必要に応じて、設定から元のGit用語を表示できます。
 
-**最新バージョン：v1.3.0** · [リリースとダウンロード](https://github.com/rumo-dev/yasashii-git/releases/latest)
+**最新バージョン：v1.4.0** · [リリースとダウンロード](https://github.com/rumo-dev/yasashii-git/releases/latest)
 
 ## できること
 
