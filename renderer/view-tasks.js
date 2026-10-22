@@ -117,7 +117,7 @@ Views.tasks = (() => {
     }
     if (status === 'done' && prev !== 'done') {
       try {
-        await finishTaskBranch(t);
+        if (!await finishTaskBranch(t)) return;
       } catch (e) { showError(e); return; }
     }
     t.status = status;                        // 先に画面へ反映（早く見える）
@@ -139,19 +139,26 @@ Views.tasks = (() => {
     const branch = taskBranch(t);
     const status = await G('status');
     const branches = await G('branches');
-    if (!branches.local.some((b) => b.name === branch)) return;
+    if (!branches.local.some((b) => b.name === branch)) return true;
     if (status.files.length) throw new Error('未コミットの変更があります。変更を記録してから完了にしてください。');
     await withBusyThrow('サーバーの更新を確認中…', () => G('fetch'));
     const refreshed = await G('branches');
-    const bases = ['main', 'master', 'develop'];
-    const base = bases.find((n) => refreshed.local.some((b) => b.name === n && b.upstream));
-    if (!base) throw new Error('取り込み先（main / master / develop）の追跡先が見つかりません。分岐を更新してから完了してください。');
+    const candidates = refreshed.local.filter((b) => b.name !== branch && b.upstream);
+    if (!candidates.length) throw new Error('取り込み先にできる分岐の追跡先が見つかりません。分岐を更新してから完了してください。');
+    const preferred = ['main', 'master', 'develop'].find((n) => candidates.some((b) => b.name === n)) || candidates[0].name;
+    const choice = await formDialog({ title: 'タスクの変更をどこに取り込みますか？', okLabel: '選択する',
+      intro: `「${branch}」の作業を取り込む分岐を選んでください。選んだ分岐に切り替えてから合流します。`,
+      fields: [{ key: 'base', label: '取り込み先の分岐', type: 'select', value: preferred,
+        options: candidates.map((b) => ({ value: b.name, label: b.name })) }] });
+    if (!choice) return false;
+    const base = choice.base;
     const target = refreshed.local.find((b) => b.name === base);
     if (target.behind > 0) throw new Error(`「${base}」にサーバー上の更新が ${target.behind} 件あります。先に「最新を取り込む」で更新してから完了してください。`);
     await withBusyThrow('取り込み先へ切り替え中…', () => G('switchBranch', base));
     const merged = await withBusyThrow('タスクの変更を取り込み中…', () => G('merge', branch));
     if (merged && merged.conflict) throw new Error('取り込みで競合が発生しました。競合を解決してから、もう一度完了にしてください。');
     await withBusyThrow('タスクの分岐を削除中…', () => G('deleteBranch', branch));
+    return true;
   }
   async function createTask(status) {
     const r = await formDialog({ title: '＋ タスクを追加', okLabel: '追加する',
