@@ -89,7 +89,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 #hint.warn { background: var(--warn-bg); color: var(--warn); }
 #hint.danger { background: var(--danger-bg); color: var(--danger); }
 #view { flex: 1; min-height: 0; overflow: auto; position: relative; }
-.pad { padding: 20px 24px; max-width: 1100px; }
+.pad { width: 100%; min-width: 0; padding: 20px 24px; }
 h2 { margin: 0 0 4px; font-size: 18px; }
 h3 { margin: 0 0 8px; font-size: 14px; }
 .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
