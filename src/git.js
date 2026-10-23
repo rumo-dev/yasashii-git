@@ -269,6 +269,15 @@ async function status(repo) {
       res.files.push({ path: t.slice(2), orig: null, x: '.', y: '?', staged: false, unstaged: true, conflict: false, untracked: true, indexLabel: '', workLabel: STATE_LABEL['?'] });
     }
   }
+  // 追跡先がまだない作業ブランチ（タスクから作ったブランチなど）は、
+  // porcelain status に branch.ab が出ない。どのリモート追跡ブランチにも
+  // 含まれていない記録数を数え、アップロードボタンを正しく有効にする。
+  if (res.hasCommits && !res.upstream) {
+    try {
+      const count = await out(repo, ['rev-list', '--count', 'HEAD', '--not', '--remotes']);
+      res.ahead = Number.parseInt(count.trim(), 10) || 0;
+    } catch (_) { /* 数えられなくてもファイルの状態は表示する */ }
+  }
   try { await annotateBig(repo, res.files); } catch (_) { /* サイズ判定に失敗しても、一覧は表示する */ }
   try {
     const gd = await gitDirOf(repo);
