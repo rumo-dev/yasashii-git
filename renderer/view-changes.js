@@ -183,6 +183,7 @@ Views.changes = (() => {
     const gone = (mode === 'staged' ? f.x : f.y) === 'D';   // 削除されたファイルは開けない
     const items = [
       { label: '📄 ファイルを開く', disabled: gone, onclick: () => APP('openFile', S.repo, f.path).catch(showError) },
+      { label: '📝 選択したエディターで開く', disabled: gone, onclick: () => APP('openInEditor', S.repo, f.path, S.settings.editor || 'auto').catch(showError) },
       { label: '📂 フォルダを開く', onclick: () => APP('showInFolder', S.repo, f.path).catch(showError) },
     ];
     if ((mode === 'staged' || mode === 'unstaged') && !f.tooBig) items.push('sep', { label: mode === 'staged' ? `選択した ${rangeSelection.staged.size || 1} 個をステージから外す` : `選択した ${rangeSelection.unstaged.size || 1} 個をステージ`, onclick: () => rangeSelection[mode].size ? applyRange(mode) : changeStage(f, mode) });
@@ -307,6 +308,7 @@ Views.changes = (() => {
     const modeLabel = sel.mode === 'staged' ? '（記録に含める予定）' : sel.mode === 'conflict' ? '（ぶつかり）' : '';
     diffHead.append(h('span', { class: 'grow' }, `📄 ${sel.path} `, h('span', { class: 'muted', style: { fontWeight: 400 } }, modeLabel)),
       h('button', { class: 'btn small', onclick: () => APP('openFile', S.repo, sel.path).catch(showError) }, 'ファイルを開く'),
+      h('button', { class: 'btn small', title: '選択したエディターで開く', onclick: () => APP('openInEditor', S.repo, sel.path, S.settings.editor || 'auto').catch(showError) }, 'エディターで開く'),
       h('button', { class: 'btn small', onclick: () => APP('showInFolder', S.repo, sel.path).catch(showError) }, 'フォルダで表示'));
     const cur = S.status.files.find((x) => x.path === sel.path);
     if (cur && cur.tooBig && sel.mode === 'unstaged') {

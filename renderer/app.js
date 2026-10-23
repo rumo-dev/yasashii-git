@@ -411,7 +411,9 @@ function updateChrome() {
     h('button', { class: 'btn' + (st.ahead ? ' primary' : ''), disabled: !st.ahead, title: st.ahead ? hint('push') : 'アップロードする記録はありません', onclick: doPush }, '⬆️ ', termLabel('push'), h('span', { class: 'badge' }, '↑' + (st.ahead || 0))),
     h('div', { class: 'topbar-utility-buttons' },
       h('button', { class: 'btn ghost', title: 'エクスプローラー / Finder でフォルダを開く', onclick: () => APP('openFolder', S.repo) }, '📂'),
-      h('button', { class: 'btn ghost', title: 'チュートリアルサイトをブラウザーで開く', 'aria-label': 'チュートリアルサイトを開く', onclick: () => APP('openExternal', 'https://rumo-dev.github.io/yasashii-git/').catch(showError) }, '🔰')),
+      h('button', { class: 'btn ghost', title: 'チュートリアルサイトをブラウザーで開く', 'aria-label': 'チュートリアルサイトを開く', onclick: () => APP('openExternal', 'https://rumo-dev.github.io/yasashii-git/').catch(showError) }, '🔰'),
+      h('button', { class: 'btn ghost', title: '選択したエディターでプロジェクトを開く', 'aria-label': 'エディターで開く', onclick: () => APP('openInEditor', S.repo, null, S.settings.editor || 'auto').catch(showError) }, '📝'),
+      h('button', { class: 'btn ghost', title: 'プロジェクトのフォルダでターミナルを開く', 'aria-label': 'ターミナルで開く', onclick: () => APP('openTerminal', S.repo).catch(showError) }, '⌨️')),
   ].filter(Boolean).forEach((el) => bar.appendChild(el));
   // ヒント
   const hnt = $('#hint');

@@ -2,6 +2,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const git = require('./src/git');
 const gh = require('./src/gh');
 const updaterLib = require('./src/updater');
@@ -20,7 +21,7 @@ let win = null;
 
 /* ----------------------------- 保存データ ----------------------------- */
 const storePath = () => path.join(app.getPath('userData'), 'settings.json');
-const DEFAULTS = { recent: [], showOriginal: true, theme: 'auto', lastRepo: null, safetyCheck: true, autoUpdateCheck: true };
+const DEFAULTS = { recent: [], showOriginal: true, theme: 'auto', lastRepo: null, safetyCheck: true, autoUpdateCheck: true, editor: 'auto' };
 function readStore() {
   try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(storePath(), 'utf8')) }; }
   catch (_) { return { ...DEFAULTS }; }
@@ -28,6 +29,112 @@ function readStore() {
 function writeStore(s) {
   try { fs.mkdirSync(path.dirname(storePath()), { recursive: true }); fs.writeFileSync(storePath(), JSON.stringify(s, null, 2)); }
   catch (_) { /* 無視 */ }
+}
+
+const EDITORS = [
+  { id: 'vscode', label: 'Visual Studio Code' },
+  { id: 'vscode-insiders', label: 'Visual Studio Code Insiders' },
+  { id: 'cursor', label: 'Cursor' },
+];
+function executable(file) {
+  try { const st = fs.statSync(file); return st.isFile() && (process.platform === 'win32' || (st.mode & 0o111) !== 0); } catch (_) { return false; }
+}
+function findOnPath(names) {
+  const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  for (const dir of dirs) for (const name of names) {
+    const file = path.join(dir.replace(/^"|"$/g, ''), name);
+    if (executable(file)) return file;
+  }
+  return null;
+}
+function editorCandidates(id) {
+  const home = app.getPath('home');
+  if (process.platform === 'win32') {
+    const local = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+    const roots = [process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.ProgramW6432].filter(Boolean);
+    const rel = id === 'vscode' ? ['Programs/Microsoft VS Code/Code.exe', 'Microsoft VS Code/Code.exe']
+      : id === 'vscode-insiders' ? ['Programs/Microsoft VS Code Insiders/Code - Insiders.exe', 'Microsoft VS Code Insiders/Code - Insiders.exe']
+        : ['Programs/Cursor/Cursor.exe', 'Cursor/Cursor.exe'];
+    return [path.join(local, rel[0]), ...roots.map((r) => path.join(r, rel[1])), ...roots.map((r) => path.join(r, rel[0]))];
+  }
+  const appName = id === 'vscode' ? 'Visual Studio Code' : id === 'vscode-insiders' ? 'Visual Studio Code - Insiders' : 'Cursor';
+  const command = id === 'vscode' ? 'code' : id === 'vscode-insiders' ? 'code-insiders' : 'cursor';
+  if (process.platform === 'darwin') return [
+    path.join(home, 'Applications', `${appName}.app`, 'Contents', 'Resources', 'app', 'bin', command),
+    path.join('/Applications', `${appName}.app`, 'Contents', 'Resources', 'app', 'bin', command),
+    findOnPath([command]),
+  ].filter(Boolean);
+  return [findOnPath([command])].filter(Boolean);
+}
+function resolveEditor(id) {
+  const ids = id === 'auto' ? ['vscode', 'cursor', 'vscode-insiders'] : [id];
+  for (const editorId of ids) {
+    const spec = EDITORS.find((e) => e.id === editorId);
+    if (!spec) continue;
+    const file = editorCandidates(editorId).find(executable);
+    if (file) return { id: editorId, label: spec.label, file };
+  }
+  return null;
+}
+function safeProjectPath(repo, rel) {
+  const root = path.resolve(repo);
+  const abs = rel ? path.resolve(root, rel) : root;
+  const relative = path.relative(root, abs);
+  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) throw new Error('プロジェクトの外のファイルは開けません。');
+  return abs;
+}
+function startDetached(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    let child;
+    try { child = spawn(command, args, { detached: true, stdio: 'ignore', windowsHide: true, ...options }); }
+    catch (e) { reject(e); return; }
+    child.once('error', reject);
+    child.once('spawn', () => { child.unref(); resolve(true); });
+  });
+}
+function buildEditorChoices() {
+  return [{ id: 'auto', label: '自動（VS Code、Cursorなど）', available: !!resolveEditor('auto') },
+    ...EDITORS.map((e) => ({ ...e, available: !!resolveEditor(e.id) })),
+    { id: 'system', label: 'OSの標準アプリ', available: true }];
+}
+async function launchEditor(repo, rel, editor = 'auto') {
+  const target = safeProjectPath(repo, rel);
+  if (editor === 'system') {
+    const err = await shell.openPath(target);
+    if (err) throw new Error('OSの標準アプリで開けませんでした：' + err);
+    return true;
+  }
+  const chosen = resolveEditor(editor);
+  if (!chosen) throw new Error(editor === 'auto' ? '対応するエディターが見つかりません。「設定」でエディターを選ぶか、エディターをインストールしてください。' : `${EDITORS.find((e) => e.id === editor)?.label || '選択したエディター'}が見つかりません。インストール状態を確認してください。`);
+  await startDetached(chosen.file, ['--reuse-window', target]);
+  return true;
+}
+async function launchTerminal(repo) {
+  const dir = safeProjectPath(repo);
+  if (process.platform === 'win32') {
+    const local = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
+    const wt = findOnPath(['wt.exe']) || path.join(local, 'Microsoft', 'WindowsApps', 'wt.exe');
+    if (executable(wt)) return startDetached(wt, ['-d', dir], { windowsHide: false });
+    const ps = findOnPath(['pwsh.exe', 'powershell.exe']) || 'powershell.exe';
+    const command = `Set-Location -LiteralPath '${dir.replace(/'/g, "''")}'`;
+    return startDetached(ps, ['-NoExit', '-Command', command], { windowsHide: false });
+  }
+  if (process.platform === 'darwin') {
+    const command = `cd '${dir.replace(/'/g, "'\\''")}'`;
+    const script = `tell application "Terminal" to do script "${command.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+    await startDetached('osascript', ['-e', script], { cwd: dir, windowsHide: false });
+    return true;
+  }
+  const terms = [
+    ['gnome-terminal', ['--working-directory=' + dir]], ['konsole', ['--workdir', dir]],
+    ['xfce4-terminal', ['--working-directory=' + dir]], ['kitty', ['--directory', dir]],
+    ['alacritty', ['--working-directory', dir]], ['x-terminal-emulator', []],
+  ];
+  for (const [name, args] of terms) {
+    const executablePath = findOnPath([name]);
+    if (executablePath) return startDetached(executablePath, args, { cwd: dir, windowsHide: false });
+  }
+  throw new Error('対応するターミナルが見つかりません。ターミナルアプリをインストールしてください。');
 }
 
 /* ------------------------------ アプリ機能 ------------------------------ */
@@ -39,6 +146,9 @@ const appApi = {
     return r.canceled ? null : r.filePaths[0];
   },
   async getSettings() { return readStore(); },
+  async editorChoices() { return buildEditorChoices(); },
+  async openInEditor(repo, rel, editor) { return launchEditor(repo, rel, editor || readStore().editor || 'auto'); },
+  async openTerminal(repo) { return launchTerminal(repo); },
   async setSettings(patch) {
     const s = { ...readStore(), ...patch }; writeStore(s);
     if (patch.autoUpdateCheck === true && updater) updater.check({ manual: false }).catch(() => {});

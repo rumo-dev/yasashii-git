@@ -6,8 +6,8 @@ Views.settings = (() => {
   function onStatus() {}
 
   async function draw() {
-    let user, remotes, ignore, ignoreTemplates;
-    try { [user, remotes, ignore, ignoreTemplates] = await Promise.all([G('getUser'), G('remotes'), G('readIgnore'), G('ignoreTemplates')]); }
+    let user, remotes, ignore, ignoreTemplates, editorOptions;
+    try { [user, remotes, ignore, ignoreTemplates, editorOptions] = await Promise.all([G('getUser'), G('remotes'), G('readIgnore'), G('ignoreTemplates'), APP('editorChoices')]); }
     catch (e) { clear(root).appendChild(h('div', { class: 'pad' }, e.message)); return; }
 
     const nameIn = h('input', { type: 'text', value: user.name || user.globalName || '', placeholder: '例：山田 太郎' });
@@ -20,6 +20,9 @@ Views.settings = (() => {
     const minSel = h('select', { style: { width: 'auto' }, disabled: !S.settings.autoFetch, onchange: () => saveSettings({ autoFetchMin: Number(minSel.value) }) },
       [1, 3, 5, 10, 30].map((m) => h('option', { value: m, selected: (Number(S.settings.autoFetchMin) || 5) === m }, m + '分ごと')));
     const autoChk = h('input', { type: 'checkbox', checked: !!S.settings.autoFetch, onchange: () => { minSel.disabled = !autoChk.checked; saveSettings({ autoFetch: autoChk.checked }).then(() => toast(autoChk.checked ? '定期的な更新確認をオンにしました' : '定期的な更新確認をオフにしました')); } });
+    const editorValue = S.settings.editor || 'auto';
+    const editorSel = h('select', { style: { width: 'auto' }, value: editorValue, onchange: async () => { await saveSettings({ editor: editorSel.value }); toast('エディターの設定を保存しました'); } },
+      editorOptions.map((e) => h('option', { value: e.id, selected: e.id === editorValue, disabled: e.id !== 'auto' && e.id !== 'system' && !e.available && e.id !== editorValue }, e.label + (!e.available && e.id !== 'auto' && e.id !== 'system' ? '（見つかりません）' : ''))));
     const themes = [
       { id: 'auto', name: 'システムに合わせる', colors: ['#f6f7f9', '#ffffff', '#2f7d5b'] },
       { id: 'light', name: 'リーフ', colors: ['#f6f7f9', '#ffffff', '#2f7d5b'] },
@@ -86,6 +89,11 @@ Views.settings = (() => {
           h('button', { class: 'btn small', onclick: () => editRemote(r) }, 'URLを変更'),
           h('button', { class: 'btn small danger', onclick: () => delRemote(r) }, '削除'))) : h('div', { class: 'empty' }, 'まだ接続先がありません。（最初の「アップロード」で自動的に作られます）')),
         h('button', { class: 'btn', onclick: addRemote }, '＋ 接続先を追加')),
+
+      h('div', { class: 'card' }, h('h3', {}, '🧰 エディター'),
+        h('p', { class: 'muted', style: { marginTop: 0 } }, '上部の📝ボタンやファイルの右クリックから、プロジェクトやファイルを選択したエディターで開けます。'),
+        h('label', { class: 'field' }, h('span', {}, '使うエディター'), editorSel),
+        h('small', { class: 'muted' }, '自動は Visual Studio Code、Cursor、Visual Studio Code Insiders の順で見つかったものを使います。OSの標準アプリを選ぶと、ファイルは関連付けられたアプリ、フォルダはファイル管理アプリで開きます。')),
 
       h('div', { class: 'card' }, h('h3', {}, '🚫 ', termLabel('gitignore')),
         h('p', { class: 'muted', style: { marginTop: 0 } }, '1行に1つ、記録したくないファイル名やフォルダ名を書きます。（パスワードを書いたファイルなどは必ず入れましょう）'),
