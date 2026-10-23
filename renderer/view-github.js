@@ -6,7 +6,7 @@ Views.github = (() => {
   function render(container) { root = container; auth = null; draw(); }
   function onStatus() {}
 
-  const TABS = [['account', '👤 アカウント'], ['repos', '📚 リポジトリ'], ['prs', '🔀 変更の提案'], ['issues', '💬 課題・相談'], ['releases', '🚀 リリース']];
+  const TABS = [['account', '👤 アカウント'], ['repos', '📚 リポジトリ'], ['prs', '🔀 変更の提案'], ['issues', '💬 課題・相談'], ['actions', '⚙️ Actions'], ['releases', '🚀 リリース']];
 
   async function draw() {
     body = h('div', {});
@@ -26,6 +26,7 @@ Views.github = (() => {
     if (tab === 'repos') return repos();
     if (tab === 'prs') return prs();
     if (tab === 'issues') return issues();
+    if (tab === 'actions') return actions();
     if (tab === 'releases') return releases();
   }
 
@@ -194,6 +195,149 @@ Views.github = (() => {
   }
   async function setIssue(i, fn, msg) {
     if (await withBusy('処理中…', () => GH(fn, S.repo, i.number))) { toast(msg); draw(); }
+  }
+
+  /* ---------------- GitHub Actions ---------------- */
+  async function actions() {
+    const localEl = h('div', {}), remoteEl = h('div', {}), runsEl = h('div', {});
+    body.appendChild(h('div', { class: 'btn-row', style: { marginBottom: '12px' } },
+      h('button', { class: 'btn primary', onclick: createActionsWorkflow }, '＋ ワークフローを作る'),
+      S.hasRemote ? h('button', { class: 'btn', onclick: loadActions }, '🔄 更新') : null));
+    body.appendChild(h('p', { class: 'sub' }, '自動テストやビルドなどを設定できます。ワークフローはプロジェクト内に作成し、アップロード後にGitHubで有効になります。'));
+    body.appendChild(h('section', { class: 'card' }, h('h3', {}, 'このパソコンにあるワークフロー'),
+      h('p', { class: 'muted', style: { fontSize: '12px' } }, '作成・編集したファイルはローカルに保存されます。内容を確認してから「記録」してアップロードしてください。'), localEl));
+    if (S.hasRemote) {
+      body.appendChild(h('section', { class: 'card' }, h('h3', {}, 'GitHub上のワークフロー'), remoteEl));
+      body.appendChild(h('section', { class: 'card' }, h('h3', {}, '最近の実行'), runsEl));
+      remoteEl.appendChild(h('div', { class: 'empty' }, '読み込み中…'));
+      runsEl.appendChild(h('div', { class: 'empty' }, '読み込み中…'));
+    } else {
+      body.appendChild(h('div', { class: 'card' }, 'このプロジェクトはGitHubとつながっていません。ワークフローを作成して記録・アップロードすると、GitHub Actionsを利用できます。'));
+    }
+    await loadActions();
+
+    async function loadActions() {
+      try {
+        const local = await GH('listLocalActionsWorkflows', S.repo);
+        clear(localEl);
+        if (!local.length) localEl.appendChild(h('div', { class: 'empty' }, 'ワークフローはまだありません。テンプレートから作成できます。'));
+        else localEl.appendChild(h('div', { class: 'list' }, local.map((f) => h('div', { class: 'row' },
+          h('span', {}, '📄'), h('div', { class: 'grow mono' }, f.filename),
+          h('span', { class: 'muted', style: { fontSize: '12px' } }, `${Math.ceil(f.size / 1024)} KB`),
+          h('button', { class: 'btn small', onclick: () => editActionsWorkflow(f.filename) }, '編集')))));
+      } catch (e) { clear(localEl).appendChild(h('div', { class: 'empty' }, e.message)); }
+      if (!S.hasRemote || !root.isConnected) return;
+      const [workflowsResult, runsResult] = await Promise.allSettled([GH('listActionsWorkflows', S.repo), GH('listActionsRuns', S.repo)]);
+      clear(remoteEl);
+      if (workflowsResult.status === 'rejected') remoteEl.appendChild(h('div', { class: 'empty' }, workflowsResult.reason.message));
+      else {
+        const workflows = workflowsResult.value || [];
+        if (!workflows.length) remoteEl.appendChild(h('div', { class: 'empty' }, 'GitHub上にワークフローがありません。作成したファイルを記録してアップロードしてください。'));
+        else remoteEl.appendChild(h('div', { class: 'list' }, workflows.map((w) => h('div', { class: 'row' },
+          h('span', {}, w.state === 'active' ? '🟢' : '⏸️'),
+          h('div', { class: 'grow' }, h('div', { class: 'title' }, h('b', {}, w.name), h('span', { class: 'muted mono', style: { marginLeft: '8px', fontSize: '11px' } }, w.path)),
+            h('div', { class: 'muted', style: { fontSize: '12px' } }, w.state === 'active' ? '有効' : '一時停止中')),
+          h('button', { class: 'btn small primary', disabled: w.state !== 'active', title: w.state !== 'active' ? '実行するには先に有効にしてください' : 'workflow_dispatch に対応した分岐で実行します', onclick: () => runActionsWorkflow(w) }, '▶ 手動実行'),
+          h('button', { class: 'btn small', onclick: () => toggleActionsWorkflow(w) }, w.state === 'active' ? '一時停止' : '有効にする')))));
+      }
+      clear(runsEl);
+      if (runsResult.status === 'rejected') runsEl.appendChild(h('div', { class: 'empty' }, runsResult.reason.message));
+      else {
+        const runs = runsResult.value || [];
+        if (!runs.length) runsEl.appendChild(h('div', { class: 'empty' }, '実行履歴はありません。'));
+        else runsEl.appendChild(h('div', { class: 'list' }, runs.map((r) => {
+          const active = ['queued', 'in_progress', 'requested', 'waiting', 'pending'].includes(r.status);
+          const stateText = active ? (r.status === 'in_progress' ? '実行中' : '待機中') : r.conclusion === 'success' ? '成功' : r.conclusion === 'failure' ? '失敗' : r.conclusion === 'cancelled' ? 'キャンセル' : (r.conclusion || r.status || '完了');
+          const stateClass = active ? 'pill blue' : r.conclusion === 'success' ? 'pill green' : r.conclusion === 'failure' ? 'pill red' : 'pill';
+          return h('div', { class: 'row' }, h('span', {}, active ? '⏳' : r.conclusion === 'success' ? '✅' : r.conclusion === 'failure' ? '❌' : '⚪'),
+            h('div', { class: 'grow' }, h('div', { class: 'title' }, h('b', {}, r.workflowName || 'ワークフロー'), ' ', h('span', { class: stateClass }, stateText)),
+              h('div', { class: 'muted', style: { fontSize: '12px' } }, `#${r.databaseId}　${r.displayTitle || ''}　${r.headBranch || ''}　${relTime(r.createdAt)}`)),
+            h('button', { class: 'btn small', onclick: () => showActionsRun(r) }, '詳細・ログ'),
+            active ? h('button', { class: 'btn small danger', onclick: () => cancelActionsRun(r) }, 'キャンセル') : h('button', { class: 'btn small', onclick: () => rerunActionsRun(r) }, '再実行'),
+            r.url ? h('button', { class: 'btn small', onclick: () => APP('openExternal', r.url) }, 'GitHubで開く') : null);
+        })));
+      }
+    }
+
+    async function createActionsWorkflow() {
+      const templates = await GH('listActionsTemplates', S.repo);
+      const r = await formDialog({ title: 'GitHub Actions のワークフローを作る', okLabel: 'ファイルを作る', wide: true,
+        intro: 'テンプレートから .github/workflows にファイルを作ります。push などをきっかけにGitHub上でコマンドが実行されるため、記録・アップロードする前に内容を確認してください。',
+        fields: [
+          { key: 'template', label: 'テンプレート', type: 'select', value: templates[0] && templates[0].id, options: templates.map((t) => ({ value: t.id, label: `${t.label}（${t.filename}）` })) },
+          { key: 'filename', label: 'ファイル名（省略可）', placeholder: '空欄ならテンプレートの名前を使います' },
+        ] });
+      if (!r) return;
+      const result = await withBusy('ワークフローを作成中…', () => GH('createLocalActionsWorkflow', S.repo, r));
+      if (result) { toast(`${result.filename} を作成しました。内容を確認してからアップロードしてください。`); await loadActions(); }
+    }
+
+    async function editActionsWorkflow(filename) {
+      const file = await withBusy('ワークフローを読み込み中…', () => GH('readLocalActionsWorkflow', S.repo, filename));
+      if (!file) return;
+      const r = await formDialog({ title: `ワークフローを編集：${filename}`, okLabel: 'ローカルに保存', wide: true,
+        intro: '保存するとこのパソコンのファイルだけが変わります。YAMLの内容を確認してから記録・アップロードしてください。',
+        fields: [{ key: 'content', label: 'YAML', type: 'textarea', rows: 20, value: file.content }] });
+      if (!r) return;
+      const ok = await withBusy('保存中…', () => GH('saveLocalActionsWorkflow', S.repo, filename, r.content));
+      if (ok) { toast('ローカルに保存しました ✓'); await loadActions(); }
+    }
+
+    async function toggleActionsWorkflow(w) {
+      const enabled = w.state !== 'active';
+      if (!(await confirmDialog({ title: enabled ? 'ワークフローを有効にしますか？' : 'ワークフローを一時停止しますか？',
+        message: enabled ? `「${w.name}」を有効にします。設定された条件に合うと自動実行されます。` : `「${w.name}」を一時停止します。再度有効にするまで実行されません。`, okLabel: enabled ? '有効にする' : '一時停止' }))) return;
+      if (await withBusy('設定を変更中…', () => GH('setActionsWorkflowEnabled', S.repo, w.id, enabled))) { toast(enabled ? '有効にしました ✓' : '一時停止しました'); await loadActions(); }
+    }
+
+    async function runActionsWorkflow(w) {
+      const ref = S.status && S.status.branch || 'main';
+      const r = await formDialog({ title: 'ワークフローを手動実行', okLabel: '実行する',
+        intro: `「${w.name}」をGitHub上で実行します。実行する分岐に workflow_dispatch が設定され、ワークフローがGitHubへアップロード済みである必要があります。`,
+        fields: [
+          { key: 'ref', label: '実行する分岐', value: ref, required: true, help: '例：main、develop、feature/example' },
+          { key: 'inputs', label: 'ワークフローへの入力（省略可）', type: 'textarea', rows: 3, placeholder: '例：\nname=太郎\nenvironment=staging', help: '入力がある場合は「項目名=値」を1行ずつ入力します。' },
+        ] });
+      if (!r) return;
+      const inputs = {};
+      for (const line of String(r.inputs || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) {
+        const at = line.indexOf('=');
+        if (at < 1) { toast(`入力の形式を確認してください: ${line}`, 'error'); return; }
+        const key = line.slice(0, at).trim();
+        if (Object.prototype.hasOwnProperty.call(inputs, key)) { toast(`同じ入力項目が重複しています: ${key}`, 'error'); return; }
+        inputs[key] = line.slice(at + 1);
+      }
+      if (!(await confirmDialog({ title: 'GitHub Actionsを実行しますか？', message: `ワークフロー「${w.name}」を「${r.ref}」で実行します。ワークフロー内の処理がGitHub上で動きます。`, okLabel: '実行する' }))) return;
+      if (await withBusy('GitHub Actionsを開始中…', () => GH('runActionsWorkflow', S.repo, w.path || String(w.id), r.ref, inputs))) { toast('実行を開始しました ✓'); await loadActions(); }
+    }
+
+    async function showActionsRun(r) {
+      const result = await withBusy('実行の詳細とログを読み込み中…', async () => {
+        const detail = await GH('getActionsRun', S.repo, r.databaseId);
+        let log = '';
+        try { log = await GH('getActionsRunLog', S.repo, r.databaseId); }
+        catch (e) { log = `ログを取得できませんでした。実行中の場合は、完了後にもう一度確認してください。\n\n${e.message}`; }
+        return { detail, log };
+      });
+      if (!result) return;
+      const { detail, log } = result;
+      const jobs = detail && Array.isArray(detail.jobs) ? detail.jobs : [];
+      await modal({ title: `実行 #${r.databaseId}：${r.workflowName || ''}`, wide: true,
+        body: h('div', {}, detail ? h('p', { class: 'muted' }, `${detail.displayTitle || ''}　${detail.headBranch || ''}　${detail.status || ''} ${detail.conclusion || ''}`) : null,
+          jobs.length ? h('div', { class: 'list' }, jobs.map((j) => h('div', { class: 'row' }, h('span', {}, j.conclusion === 'success' ? '✅' : j.conclusion === 'failure' ? '❌' : '⏳'), h('span', { class: 'grow' }, j.name), h('span', { class: 'muted' }, j.conclusion || j.status)))) : null,
+          h('pre', { class: 'actions-log' }, log || 'ログはありません。')),
+        buttons: [{ label: '閉じる', kind: 'primary', value: true }] });
+    }
+
+    async function cancelActionsRun(r) {
+      if (!(await confirmDialog({ title: '実行をキャンセルしますか？', message: `実行 #${r.databaseId} を停止します。`, okLabel: 'キャンセルする', danger: true }))) return;
+      if (await withBusy('実行を停止中…', () => GH('cancelActionsRun', S.repo, r.databaseId))) { toast('実行をキャンセルしました'); await loadActions(); }
+    }
+
+    async function rerunActionsRun(r) {
+      if (!(await confirmDialog({ title: 'ワークフローを再実行しますか？', message: `「${r.workflowName}」の実行 #${r.databaseId} を、同じ内容で再実行します。`, okLabel: '再実行する' }))) return;
+      if (await withBusy('再実行を開始中…', () => GH('rerunActionsRun', S.repo, r.databaseId))) { toast('再実行を開始しました ✓'); await loadActions(); }
+    }
   }
 
   return { render, onStatus };

@@ -4,6 +4,8 @@
  * ログイン・リポジトリ作成・変更の提案（プルリクエスト）・課題（Issue）を日本語のエラーで扱う。
  */
 const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const { classifyAuth } = require('./auth-errors');
 
 class GhError extends Error {
@@ -88,8 +90,6 @@ const json = async (args, opts) => {
 };
 
 /* ------------------------- gh の自動インストール ------------------------- */
-const path = require('path');
-
 /** アプリから起動すると PATH が狭いため、gh が入りやすい場所を検索パスに足す */
 function extendPath() {
   if (process.env.YG_NO_PATH_EXTEND) return; // テスト用：検索パスの補正を無効にする
@@ -478,6 +478,125 @@ async function createRelease(cwd, { tag, title = '', notes = '', draft = false, 
   return { url: (r.stdout.match(/https:\/\/\S+/) || [''])[0] };
 }
 
+/* ------------------------------ GitHub Actions ------------------------------ */
+const ACTIONS_TEMPLATES = {
+  manual: {
+    filename: 'manual.yml', label: '手動実行できる最小例',
+    content: `name: 手動で試す\n\non:\n  workflow_dispatch:\n\njobs:\n  hello:\n    runs-on: ubuntu-latest\n    steps:\n      - name: メッセージを表示\n        run: echo "GitHub Actions が動きました"\n`,
+  },
+  node: {
+    filename: 'node-ci.yml', label: 'Node.js のテスト',
+    content: `name: Node.js のテスト\n\non:\n  push:\n  pull_request:\n  workflow_dispatch:\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n          cache: npm\n      - run: npm ci\n      - run: npm test\n`,
+  },
+  python: {
+    filename: 'python-ci.yml', label: 'Python のテスト',
+    content: `name: Python のテスト\n\non:\n  push:\n  pull_request:\n  workflow_dispatch:\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: '3.x'\n      - run: python -m unittest discover\n`,
+  },
+};
+const ACTIONS_FILE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\.ya?ml$/i;
+function actionsDir(cwd, create = false) {
+  if (!cwd) throw new GhError('プロジェクトのフォルダを確認できません。', '');
+  const root = fs.realpathSync(cwd);
+  let parent = root;
+  for (const name of ['.github', 'workflows']) {
+    const next = require('path').join(parent, name);
+    if (!fs.existsSync(next)) {
+      if (!create) return null;
+      fs.mkdirSync(next);
+    }
+    const st = fs.lstatSync(next);
+    if (st.isSymbolicLink() || !st.isDirectory()) throw new GhError('ワークフローの保存先が安全なフォルダではありません。', next);
+    parent = next;
+  }
+  return parent;
+}
+function actionsFile(cwd, filename, createDir = false) {
+  filename = String(filename || '');
+  if (!ACTIONS_FILE.test(filename) || filename === '.' || filename === '..') throw new GhError('ワークフローファイル名は英数字・ハイフン・アンダースコアで指定してください。（.yml または .yaml）', filename);
+  const dir = actionsDir(cwd, createDir);
+  if (!dir) return null;
+  const target = require('path').join(dir, filename);
+  if (fs.existsSync(target) && (fs.lstatSync(target).isSymbolicLink() || !fs.lstatSync(target).isFile())) throw new GhError('ワークフローファイルが安全なファイルではありません。', filename);
+  return target;
+}
+function listLocalActionsWorkflows(cwd) {
+  const dir = actionsDir(cwd);
+  if (!dir) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile() && ACTIONS_FILE.test(d.name))
+    .map((d) => ({ filename: d.name, size: fs.statSync(require('path').join(dir, d.name)).size }));
+}
+function readLocalActionsWorkflow(cwd, filename) {
+  const file = actionsFile(cwd, filename);
+  if (!file || !fs.existsSync(file)) throw new GhError('ワークフローファイルが見つかりません。', String(filename));
+  const st = fs.statSync(file);
+  if (st.size > 262144) throw new GhError('このワークフローファイルは大きすぎて編集できません。（上限 256KB）', filename);
+  return { filename, content: fs.readFileSync(file, 'utf8') };
+}
+function saveLocalActionsWorkflow(cwd, filename, content) {
+  const file = actionsFile(cwd, filename, true);
+  content = String(content == null ? '' : content);
+  if (Buffer.byteLength(content, 'utf8') > 262144) throw new GhError('ワークフローファイルは 256KB 以下にしてください。', filename);
+  if (!content.trim()) throw new GhError('ワークフローの内容を入力してください。', filename);
+  fs.writeFileSync(file, content, 'utf8');
+  return true;
+}
+function createLocalActionsWorkflow(cwd, { template, filename } = {}) {
+  const item = ACTIONS_TEMPLATES[template];
+  if (!item) throw new GhError('ワークフローのテンプレートを選んでください。', String(template));
+  filename = String(filename || item.filename).trim();
+  const file = actionsFile(cwd, filename, true);
+  if (fs.existsSync(file)) throw new GhError('同じ名前のワークフローファイルがすでにあります。', filename);
+  fs.writeFileSync(file, item.content, { encoding: 'utf8', flag: 'wx' });
+  return { filename };
+}
+function listActionsTemplates() { return Object.entries(ACTIONS_TEMPLATES).map(([id, t]) => ({ id, label: t.label, filename: t.filename })); }
+async function listActionsWorkflows(cwd) {
+  return json(['workflow', 'list', '--all', '--limit', '100', '--json', 'id,name,path,state'], { cwd });
+}
+async function listActionsRuns(cwd) {
+  return json(['run', 'list', '--limit', '30', '--json', 'databaseId,workflowName,displayTitle,event,status,conclusion,createdAt,updatedAt,url,headBranch'], { cwd });
+}
+async function runActionsWorkflow(cwd, workflow, ref, inputs = {}) {
+  workflow = String(workflow || '').trim(); ref = String(ref || '').trim();
+  if (!workflow || workflow.startsWith('-') || workflow.length > 200 || /[\r\n\0]/.test(workflow)) throw new GhError('ワークフローの指定が正しくありません。', workflow);
+  if (!/^[A-Za-z0-9_./-]{1,200}$/.test(ref) || ref.startsWith('-') || ref.includes('..')) throw new GhError('実行する分岐名を確認してください。', ref);
+  const args = ['workflow', 'run', workflow, '--ref', ref];
+  for (const [key, value] of Object.entries(inputs || {})) {
+    if (!/^[A-Za-z_][A-Za-z0-9_-]{0,99}$/.test(key)) throw new GhError('入力項目名の形式が正しくありません。', key);
+    args.push('--raw-field', `${key}=${String(value)}`);
+  }
+  await run(args, { cwd });
+  return true;
+}
+async function setActionsWorkflowEnabled(cwd, id, enabled) {
+  id = String(id || '');
+  if (!/^\d+$/.test(id)) throw new GhError('ワークフローの指定が正しくありません。', id);
+  await run(['workflow', enabled ? 'enable' : 'disable', id], { cwd });
+  return true;
+}
+async function getActionsRun(cwd, id) {
+  id = String(id || '');
+  if (!/^\d+$/.test(id)) throw new GhError('実行の指定が正しくありません。', id);
+  return json(['run', 'view', id, '--json', 'databaseId,workflowName,displayTitle,event,status,conclusion,createdAt,updatedAt,url,headBranch,jobs'], { cwd });
+}
+async function getActionsRunLog(cwd, id) {
+  id = String(id || '');
+  if (!/^\d+$/.test(id)) throw new GhError('実行の指定が正しくありません。', id);
+  const r = await run(['run', 'view', id, '--log'], { cwd });
+  const max = 180000;
+  return r.stdout.length > max ? `（ログが長いため末尾を表示しています）\n${r.stdout.slice(-max)}` : r.stdout;
+}
+async function cancelActionsRun(cwd, id) {
+  id = String(id || '');
+  if (!/^\d+$/.test(id)) throw new GhError('実行の指定が正しくありません。', id);
+  await run(['run', 'cancel', id], { cwd }); return true;
+}
+async function rerunActionsRun(cwd, id) {
+  id = String(id || '');
+  if (!/^\d+$/.test(id)) throw new GhError('実行の指定が正しくありません。', id);
+  await run(['run', 'rerun', id], { cwd }); return true;
+}
+
 /* ------------------------------ 受信箱（通知） ------------------------------ */
 const NOTE_TYPES = { PullRequest: 'pr', Issue: 'issue' };
 /** GitHub の通知（変更の提案・課題・コメント・メンションなど）。未読のものだけ、新しい順 */
@@ -503,6 +622,8 @@ module.exports = {
   GhError, friendly, available, installPlan, installCli, extendPath, authStatus, ensureGitCredentials, myNotifications, markNotificationRead, markAllNotificationsRead, refreshGitCredentials, loginWithToken, loginWeb, cancelLogin, logout,
   listRepos, createRepo, currentRepo, listMembers, listSentInvites, inviteMember, cancelSentInvite, removeMember, myInvites, acceptInvite, declineInvite, checkAccess, myLogin, myProfile,
   listReleases, createRelease,
+  listActionsTemplates, listLocalActionsWorkflows, readLocalActionsWorkflow, saveLocalActionsWorkflow, createLocalActionsWorkflow,
+  listActionsWorkflows, listActionsRuns, runActionsWorkflow, setActionsWorkflowEnabled, getActionsRun, getActionsRunLog, cancelActionsRun, rerunActionsRun,
   listPRs, viewPR, createPR, mergePR, closePR, reopenPR, checkoutPR, commentPR,
   listIssues, listTasks, setTaskStatus, assignTaskToMe, createTask, editTask, viewIssue, createIssue, closeIssue, reopenIssue, commentIssue,
   forumList, forumCreate, forumComment,
