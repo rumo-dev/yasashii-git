@@ -35,6 +35,11 @@ function termLabel(key, opts = {}) {
   return span;
 }
 
+/** 日本語の操作説明の後ろに原語だけを添える */
+function termOriginal(key) {
+  return settingsRef.showOriginal ? h('span', { class: 'en' }, TERMS[key].en) : null;
+}
+
 /* ---------------- 日時 ---------------- */
 function relTime(iso) {
   const d = new Date(iso); if (isNaN(d)) return '';

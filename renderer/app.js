@@ -8,8 +8,8 @@ const GH = (fn, ...a) => api.call('gh', fn, ...a);
 const APP = (fn, ...a) => api.call('app', fn, ...a);
 
 const NAV = [
-  { id: 'changes', ico: '✏️', label: '変更' },
-  { id: 'history', ico: '🕘', label: '履歴' },
+  { id: 'changes', ico: '✏️', label: '変更', en: 'changes' },
+  { id: 'history', ico: '🕘', label: '履歴', en: 'history' },
   { id: 'branches', ico: '🌿', label: '作業の分岐', en: 'branch' },
   { id: 'stash', ico: '📦', label: '一時退避', en: 'stash' },
   { id: 'tags', ico: '🏷️', label: '目印', en: 'tag' },
@@ -422,11 +422,11 @@ function updateChrome() {
   if (st.operation && conflicts) { msg = `🧩 ${jp('conflict')}が ${conflicts} 件あります。「変更」画面で、どちらを採用するか選んでください。`; kind = 'danger'; }
   else if (st.operation) { msg = '✅ ぶつかりは解決しました。「変更」画面で完了ボタンを押してください。'; kind = 'warn'; }
   else if (st.detached) { msg = `⚠ いま${jp('detached')}です。作業を続けるには「作業の分岐」画面で分岐に戻ってください。`; kind = 'warn'; }
-  else if (staged) { msg = `📝 ${staged} 個のファイルを記録する準備ができています。メモを書いて「${jp('commit')}」を押しましょう。`; kind = ''; }
+  else if (staged) { msg = `📝 ${staged} 個のファイルを記録する準備ができています。メモを書いて「${jpEn('commit')}」を押しましょう。`; kind = ''; }
   else if (unstaged) { msg = `✏️ ${unstaged} 個のファイルが変更されています。記録したいファイルにチェックを入れましょう。`; kind = ''; }
-  else if (st.behind) { msg = `⬇️ サーバーに ${st.behind} 件の新しい更新があります。「${jp('pull')}」で取り込みましょう。`; kind = 'warn'; }
+  else if (st.behind) { msg = `⬇️ サーバーに ${st.behind} 件の新しい更新があります。「${jpEn('pull')}」で取り込みましょう。`; kind = 'warn'; }
   else if (!S.hasRemote && st.hasCommits) { msg = '☁️ まだGitHubにありません。「アップロード」を押すと、GitHubに自動で作成して送ります。'; kind = 'ok'; }
-  else if (st.ahead) { msg = `⬆️ ${st.ahead} 件の記録がまだ共有されていません。「${jp('push')}」で送りましょう。`; kind = 'ok'; }
+  else if (st.ahead) { msg = `⬆️ ${st.ahead} 件の記録がまだ共有されていません。「${jpEn('push')}」で送りましょう。`; kind = 'ok'; }
   else if (!st.hasCommits) { msg = '🌱 まだ何も記録されていません。ファイルを追加して、最初の記録を作りましょう。'; }
   else { msg = '✨ すべて最新です。変更はありません。'; kind = 'ok'; }
   hnt.hidden = false; hnt.className = kind; hnt.textContent = msg;

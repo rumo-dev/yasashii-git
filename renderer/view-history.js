@@ -26,7 +26,7 @@ Views.history = (() => {
 
   function render(container) {
     commits = []; selected = null;
-    const search = h('input', { type: 'search', placeholder: '🔍 記録のメモで検索', value: searchText, style: { maxWidth: '260px' }, onchange: () => { searchText = search.value.trim(); load(true); } });
+    const search = h('input', { type: 'search', placeholder: `🔍 ${jpEn('message')}で検索`, value: searchText, style: { maxWidth: '260px' }, onchange: () => { searchText = search.value.trim(); load(true); } });
     const allChk = h('input', { type: 'checkbox', checked: showAll, onchange: () => { showAll = allChk.checked; load(true); } });
     listEl = h('div', { style: { flex: 1, overflow: 'auto' } });
     detailEl = h('div', { class: 'pane' });
@@ -84,10 +84,10 @@ Views.history = (() => {
         h('div', { class: 'muted', style: { fontSize: '12px' } }, `👤 ${c.author} <${c.email}>　🕒 ${fullTime(c.date)}`),
         h('div', { class: 'muted mono', style: { fontSize: '12px', margin: '4px 0 8px' } }, `ID: ${c.short}` + (c.parents.length > 1 ? `　（${jp('merge')}の記録）` : '')),
         h('div', { class: 'btn-row' },
-          btn('↩ ' + jp('revert'), () => doRevert(c)),
-          btn('📋 ' + jp('cherryPick'), () => doCherry(c)),
-          btn('🌿 ここから新しい分岐を作る', () => doBranch(c)),
-          btn('🏷 目印をつける', () => doTag(c)),
+          btn(['↩ 取り消しの記録を作る', termOriginal('revert')], () => doRevert(c)),
+          btn(['📋 この記録をコピー', termOriginal('cherryPick')], () => doCherry(c)),
+          btn(['🌿 ここから新しい分岐を作る', termOriginal('branch')], () => doBranch(c)),
+          btn(['🏷 目印をつける', termOriginal('tag')], () => doTag(c)),
           btn('👁 この時点を見る', () => doView(c)),
           btn('⏪ ' + jp('reset') + '…', () => doReset(c), true),
           btn('コピー', async () => { await APP('copyText', c.hash); toast('記録のIDをコピーしました'); }))),
