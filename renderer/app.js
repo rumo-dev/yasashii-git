@@ -374,10 +374,10 @@ async function refreshSideBranches() {
     } }, arrow, h('span', { class: 'grow' }, title), h('span', { class: 'count' }, String(items.length)));
     box.append(head, list);
   };
-  group('local', '手元の分岐', d.local, (b) => h('button', { class: 'side-row' + (b.current ? ' current' : ''), dataset: { branch: b.name }, title: b.current ? `${b.name}（今ここで作業中）` : `${b.name}\nクリックで切り替え`,
-    onclick: () => (b.current ? go('branches') : switchFromSide(b.name)) },
+  group('local', '手元の分岐', d.local, (b) => h('button', { class: 'side-row' + (b.current ? ' current' : ''), dataset: { branch: b.name }, title: `${b.name}${b.current ? '（今ここで作業中）' : '\nクリックで切り替え'}\n右クリックで操作`,
+    onclick: () => (b.current ? go('branches') : switchFromSide(b.name)), oncontextmenu: (e) => Views.branches.openSideMenu(e, b) },
     h('span', {}, b.current ? '📍' : '🌿'), h('span', { class: 'grow' }, b.name), b.ahead ? h('span', { class: 'mini' }, '↑' + b.ahead) : null, b.behind ? h('span', { class: 'mini' }, '↓' + b.behind) : null));
-  group('remote', 'サーバー上の分岐', d.remote, (b) => h('button', { class: 'side-row', dataset: { branch: b.name }, title: `${b.name}\nクリックで「作業の分岐」画面を開く`, onclick: () => go('branches') },
+  group('remote', 'サーバー上の分岐', d.remote, (b) => h('button', { class: 'side-row', dataset: { branch: b.name }, title: `${b.name}\n右クリックで操作`, onclick: () => go('branches'), oncontextmenu: (e) => Views.branches.openSideMenu(e, b, true) },
     h('span', {}, '☁️'), h('span', { class: 'grow' }, b.name)));
 }
 async function switchFromSide(name) {
@@ -409,8 +409,9 @@ function updateChrome() {
     h('button', { class: 'btn', title: hint('fetch'), onclick: doFetch }, '🔄 ', termLabel('fetch')),
     h('button', { class: 'btn' + (st.behind ? ' primary' : ''), disabled: !st.behind, title: st.behind ? hint('pull') : '取り込む更新はありません', onclick: doPull }, '⬇️ ', termLabel('pull'), h('span', { class: 'badge' }, '↓' + (st.behind || 0))),
     h('button', { class: 'btn' + (st.ahead ? ' primary' : ''), disabled: !st.ahead, title: st.ahead ? hint('push') : 'アップロードする記録はありません', onclick: doPush }, '⬆️ ', termLabel('push'), h('span', { class: 'badge' }, '↑' + (st.ahead || 0))),
-    h('button', { class: 'btn ghost', title: 'エクスプローラー / Finder でフォルダを開く', onclick: () => APP('openFolder', S.repo) }, '📂'),
-    h('button', { class: 'btn ghost', title: 'やさしいGitのチュートリアルサイトをブラウザーで開く', onclick: () => APP('openExternal', 'https://rumo-dev.github.io/yasashii-git/').catch(showError) }, '📖 チュートリアル'),
+    h('div', { class: 'topbar-utility-buttons' },
+      h('button', { class: 'btn ghost', title: 'エクスプローラー / Finder でフォルダを開く', onclick: () => APP('openFolder', S.repo) }, '📂'),
+      h('button', { class: 'btn ghost', title: 'チュートリアルサイトをブラウザーで開く', 'aria-label': 'チュートリアルサイトを開く', onclick: () => APP('openExternal', 'https://rumo-dev.github.io/yasashii-git/').catch(showError) }, '🔰')),
   ].filter(Boolean).forEach((el) => bar.appendChild(el));
   // ヒント
   const hnt = $('#hint');
