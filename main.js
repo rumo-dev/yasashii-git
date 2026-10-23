@@ -39,7 +39,11 @@ const appApi = {
     return r.canceled ? null : r.filePaths[0];
   },
   async getSettings() { return readStore(); },
-  async setSettings(patch) { const s = { ...readStore(), ...patch }; writeStore(s); return s; },
+  async setSettings(patch) {
+    const s = { ...readStore(), ...patch }; writeStore(s);
+    if (patch.autoUpdateCheck === true && updater) updater.check({ manual: false }).catch(() => {});
+    return s;
+  },
   async addRecent(dir) {
     const s = readStore();
     s.recent = [dir, ...s.recent.filter((d) => d !== dir)].slice(0, 12);
@@ -90,7 +94,7 @@ const appApi = {
 };
 
 /* ------------------------------ 自動更新 ------------------------------ */
-const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 起動中は6時間ごとに確認
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;    // 起動中は1時間ごとに確認
 const UPDATE_FIRST_CHECK_MS = 15 * 1000;             // 起動して15秒後に最初の確認（起動をじゃましない）
 let updater = null;
 

@@ -107,7 +107,7 @@ Views.settings = (() => {
 
       h('div', { class: 'card' }, h('h3', {}, '🔄 更新の自動確認'),
         h('label', { class: 'check', style: { marginBottom: '10px' } }, autoChk, h('span', {}, '一定時間ごとに、サーバーに新しい更新がないか自動で確認する',
-          h('div', { class: 'muted', style: { fontSize: '12px' } }, '確認するだけで、手元のファイルは変わりません。アプリを開いている間だけ動きます。（初期設定はオフ）'))),
+          h('div', { class: 'muted', style: { fontSize: '12px' } }, '起動後に確認し、その後は1時間ごとに確認します。オンに切り替えたときもすぐ確認します。確認するだけで、手元のファイルは変わりません。アプリを開いている間だけ動きます。（初期設定はオン）'))),
         h('label', { class: 'field' }, h('span', {}, '確認する間隔'), minSel)),
 
       updCard,
