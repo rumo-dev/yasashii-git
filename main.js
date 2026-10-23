@@ -7,6 +7,9 @@ const git = require('./src/git');
 const gh = require('./src/gh');
 const updaterLib = require('./src/updater');
 
+// Windows のタスクバーでアプリのアイコンを正しく識別できるようにする
+if (process.platform === 'win32') app.setAppUserModelId('jp.yasashii.git');
+
 let win = null;
 
 // Finder / スタートメニューから起動すると PATH が狭く、gh や Homebrew の git が見つからないことがあるため補う

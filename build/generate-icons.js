@@ -5,16 +5,26 @@ const sharp = require('sharp');
 async function main() {
   const sourcePath = path.join(__dirname, 'icon-source.png');
   const source = await fs.readFile(sourcePath);
-  const thumbnail = await sharp(source).resize(256, 256).png().toBuffer();
+  const circle = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><circle cx="512" cy="512" r="512" fill="white"/></svg>');
+  const insetArtwork = await sharp(source).resize(900, 900).png().toBuffer();
+  const roundedIcon = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 0 } } })
+    .composite([
+      { input: circle },
+      { input: insetArtwork, left: 62, top: 62 },
+      { input: circle, blend: 'dest-in' },
+    ])
+    .png()
+    .toBuffer();
+  const thumbnail = await sharp(roundedIcon).resize(256, 256).png().toBuffer();
   const dataUrl = `data:image/png;base64,${thumbnail.toString('base64')}`;
   const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><image width="1024" height="1024" href="${dataUrl}"/></svg>`;
   const sizes = [16, 24, 32, 48, 64, 128, 256];
   const pngs = await Promise.all(sizes.map((size) =>
-    sharp(source).resize(size, size).png().toBuffer(),
+    sharp(roundedIcon).resize(size, size).png().toBuffer(),
   ));
 
   await fs.writeFile(path.join(__dirname, 'icon.svg'), iconSvg);
-  await sharp(source).resize(1024, 1024).png().toFile(path.join(__dirname, 'icon.png'));
+  await fs.writeFile(path.join(__dirname, 'icon.png'), roundedIcon);
 
   const header = Buffer.alloc(6 + sizes.length * 16);
   header.writeUInt16LE(0, 0);
