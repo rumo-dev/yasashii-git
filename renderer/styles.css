@@ -99,6 +99,8 @@ h3 { margin: 0 0 8px; font-size: 14px; }
 
 /* ---- ボタン ---- */
 .btn { border: 1px solid var(--border); background: var(--panel); border-radius: 8px; padding: 6px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn-label { min-width: 0; white-space: normal; }
+.btn-label .en { display: inline-block; }
 .btn:hover:not(:disabled) { background: var(--panel2); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }

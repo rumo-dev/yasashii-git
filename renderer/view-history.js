@@ -76,7 +76,7 @@ Views.history = (() => {
     if (!c) { detailEl.appendChild(h('div', { class: 'diff-note' }, '記録を選ぶと詳細が表示されます。')); return; }
     const fileList = h('div', { style: { maxHeight: '180px', overflow: 'auto', borderBottom: '1px solid var(--border)' } });
     const diffArea = h('div', { style: { flex: 1, overflow: 'auto' } });
-    const btn = (label, fn, danger) => h('button', { class: 'btn small' + (danger ? ' danger' : ''), onclick: fn }, label);
+    const btn = (label, fn, danger) => h('button', { class: 'btn small' + (danger ? ' danger' : ''), onclick: fn }, h('span', { class: 'btn-label' }, label));
     detailEl.append(
       h('div', { class: 'detail-head' },
         h('h3', {}, c.subject),

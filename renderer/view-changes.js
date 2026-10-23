@@ -19,8 +19,8 @@ Views.changes = (() => {
     autoEl = h('div', { class: 'auto-memo' });
     amendEl = h('input', { type: 'checkbox', checked: draft.amend, onchange: onAmend });
     commitBtn = h('button', { class: 'btn primary', style: { justifyContent: 'center' }, onclick: () => doCommit(false) });
-    commitPushBtn = h('button', { class: 'btn commit-push', style: { justifyContent: 'center' }, title: '変更を記録して、そのままGitHubへアップロードします', onclick: () => doCommit(true) }, '⬆️ 記録して、そのままアップロード', termOriginal('commit'), ' + ', termOriginal('push'));
-    undoBtn = h('button', { class: 'btn commit-undo', title: '直前の記録をなかったことにします。ファイルの中身は変わらず、「記録に含める」状態に戻ります。', onclick: doUndo }, '↩ 直前の記録を取り消す', termOriginal('revert'), '（変更は残ります）');
+    commitPushBtn = h('button', { class: 'btn commit-push', style: { justifyContent: 'center' }, title: '変更を記録して、そのままGitHubへアップロードします', onclick: () => doCommit(true) }, '⬆️ 記録して、そのままアップロード');
+    undoBtn = h('button', { class: 'btn commit-undo', title: '直前の記録をなかったことにします。ファイルの中身は変わらず、「記録に含める」状態に戻ります。', onclick: doUndo }, h('span', { class: 'btn-label' }, '↩ 直前の記録を戻す', termOriginal('reset'), '（変更は残ります）'));
     commitBox = h('div', { class: 'commit-box' },
       h('div', { style: { fontWeight: 700 } }, '📝 ', termLabel('commit')),
       h('div', { class: 'commit-summary-group' }, summaryEl, autoEl, counterEl),
@@ -355,8 +355,8 @@ Views.changes = (() => {
     counterEl.textContent = `${summary.length} 文字　${summary.length > 50 ? '（50文字くらいまでだと読みやすいです）' : ''}`;
     const amend = amendEl.checked;
     clear(commitBtn);
-    if (amend) commitBtn.append('✏️ 直前の記録を修正する', termOriginal('amend'));
-    else commitBtn.append(staged ? '✔ 変更を記録する' : changes ? '✔ すべての変更を記録する' : '✔ 変更を記録する', termOriginal('commit'), `${staged ? `（${staged}個のファイル）` : changes ? `（${changes}個）` : ''}`);
+    if (amend) commitBtn.append(h('span', { class: 'btn-label' }, '✏️ 直前の記録を修正する', termOriginal('amend')));
+    else commitBtn.append(h('span', { class: 'btn-label' }, staged ? '✔ 変更を記録する' : changes ? '✔ すべての変更を記録する' : '✔ 変更を記録する', termOriginal('commit'), `${staged ? `（${staged}個のファイル）` : changes ? `（${changes}個）` : ''}`));
     commitBtn.disabled = hasConflict || !summary || (!amend && !changes) || !!st.operation;
     commitBox.hidden = !!st.operation;
     layoutEl.classList.toggle('operation', !!st.operation);

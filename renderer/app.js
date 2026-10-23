@@ -8,8 +8,8 @@ const GH = (fn, ...a) => api.call('gh', fn, ...a);
 const APP = (fn, ...a) => api.call('app', fn, ...a);
 
 const NAV = [
-  { id: 'changes', ico: '✏️', label: '変更', en: 'changes' },
-  { id: 'history', ico: '🕘', label: '履歴', en: 'history' },
+  { id: 'changes', ico: '✏️', label: '変更' },
+  { id: 'history', ico: '🕘', label: '履歴' },
   { id: 'branches', ico: '🌿', label: '作業の分岐', en: 'branch' },
   { id: 'stash', ico: '📦', label: '一時退避', en: 'stash' },
   { id: 'tags', ico: '🏷️', label: '目印', en: 'tag' },
