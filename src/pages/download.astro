@@ -1,0 +1,101 @@
+---
+import KnowledgeLayout from '../layouts/KnowledgeLayout.astro';
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+---
+<KnowledgeLayout title="ダウンロード｜やさしいGit" description="お使いのOSとバージョンを選んで、やさしいGitをダウンロードできます。Windows・macOS・Linuxに対応。">
+  <header class="article-hero download-hero">
+    <a class="back-home" href={base}>← ガイドのトップ</a><p class="eyebrow">DOWNLOAD · やさしいGit</p>
+    <h1>あなたの環境に合わせて、<br /><em>アプリをダウンロード。</em></h1>
+    <p>OSとバージョンを選ぶと、対応するインストーラーを案内します。</p>
+    <div class="reading-meta"><span>Windows</span><span>macOS</span><span>Linux</span></div>
+  </header>
+  <section class="download-panel" aria-labelledby="download-title">
+    <div class="download-panel-heading"><span aria-hidden="true">⬇️</span><div><p class="eyebrow">DOWNLOAD OPTIONS</p><h2 id="download-title">ダウンロードするファイルを選択</h2></div></div>
+    <p class="download-intro">通常は、お使いのパソコンに合わせて自動選択された項目のままで大丈夫です。</p>
+    <div class="download-fields">
+      <label>OS
+        <select id="download-os"><option value="windows">Windows</option><option value="mac">macOS</option><option value="linux">Linux</option></select>
+      </label>
+      <label>バージョン
+        <select id="download-version" disabled><option>リリースを読み込み中…</option></select>
+      </label>
+      <label>ファイル形式
+        <select id="download-format" disabled><option>選択してください</option></select>
+      </label>
+    </div>
+    <p class="download-status" id="download-status" aria-live="polite">公開されているバージョンを確認しています。</p>
+    <a class="home-button primary download-button" id="download-button" href="https://github.com/rumo-dev/yasashii-git/releases/latest" aria-disabled="true">ダウンロード ↗</a>
+    <p class="download-note">インストーラーが見つからない場合や、すべてのファイルを確認したい場合は<a href="https://github.com/rumo-dev/yasashii-git/releases" target="_blank" rel="noreferrer">GitHub Releases</a>を開いてください。</p>
+  </section>
+  <section class="download-help"><h2>どれを選べばいい？</h2><div class="download-help-grid"><article><h3>Windows</h3><p>通常は「セットアップ版」を選びます。インストールせずに使いたい場合は「ポータブル版」です。</p></article><article><h3>macOS</h3><p>Apple Silicon搭載Macはarm64、Intel搭載Macはx64を選びます。</p></article><article><h3>Linux</h3><p>迷ったらAppImageをお試しください。DebianやUbuntuではdeb形式も使えます。</p></article></div><a class="text-link" href={`${base}app-guide/`}>インストールと初期設定のガイドを見る ↗</a></section>
+  <script>
+    const releasesUrl = 'https://api.github.com/repos/rumo-dev/yasashii-git/releases?per_page=100';
+    const osSelect = document.querySelector('#download-os');
+    const versionSelect = document.querySelector('#download-version');
+    const formatSelect = document.querySelector('#download-format');
+    const status = document.querySelector('#download-status');
+    const button = document.querySelector('#download-button');
+    let releases = [];
+    const detectOS = () => /Mac|iPhone|iPad/.test(navigator.platform) ? 'mac' : /Linux/.test(navigator.platform) ? 'linux' : 'windows';
+    osSelect.value = detectOS();
+    const choicesFor = (os, release) => release.assets.flatMap(asset => {
+      const name = asset.name;
+      if (os === 'windows' && /yasashii-git-Setup-.*-x64\.exe$/i.test(name)) return [{ asset, label: 'セットアップ版（x64）' }];
+      if (os === 'windows' && /yasashii-git-Portable-.*-x64\.exe$/i.test(name)) return [{ asset, label: 'ポータブル版（x64）' }];
+      if (os === 'mac' && /yasashii-git-.*-Mac-x64\.dmg$/i.test(name)) return [{ asset, label: 'Intel Mac（x64）' }];
+      if (os === 'mac' && /yasashii-git-.*-Mac-arm64\.dmg$/i.test(name)) return [{ asset, label: 'Apple Silicon（arm64）' }];
+      if (os === 'linux' && /yasashii-git-.*-Linux-x64\.AppImage$/i.test(name)) return [{ asset, label: 'AppImage（x64）' }];
+      if (os === 'linux' && /yasashii-git-.*-Linux-arm64\.AppImage$/i.test(name)) return [{ asset, label: 'AppImage（arm64）' }];
+      if (os === 'linux' && /yasashii-git-.*-Linux-x64\.deb$/i.test(name)) return [{ asset, label: 'deb（x64）' }];
+      if (os === 'linux' && /yasashii-git-.*-Linux-arm64\.deb$/i.test(name)) return [{ asset, label: 'deb（arm64）' }];
+      return [];
+    });
+    function updateAssets() {
+      const release = releases.find(item => item.tag_name === versionSelect.value);
+      const choices = release ? choicesFor(osSelect.value, release) : [];
+      formatSelect.replaceChildren();
+      choices.forEach(({ asset, label }) => {
+        const option = document.createElement('option');
+        option.value = asset.browser_download_url;
+        option.textContent = label;
+        formatSelect.append(option);
+      });
+      const available = choices.length > 0;
+      formatSelect.disabled = !available;
+      button.href = available ? choices[0].asset.browser_download_url : (release?.html_url || 'https://github.com/rumo-dev/yasashii-git/releases');
+      button.setAttribute('aria-disabled', String(!available));
+      status.textContent = available ? `${release.name || release.tag_name} のファイルを選べます。` : 'このOS・バージョンの配布ファイルはありません。別のバージョンを選ぶか、GitHub Releasesを確認してください。';
+      button.textContent = available ? 'ダウンロード ↗' : 'リリースを確認 ↗';
+    }
+    function updateVersions() {
+      const previous = versionSelect.value;
+      versionSelect.replaceChildren();
+      releases.forEach(release => {
+        const option = document.createElement('option');
+        option.value = release.tag_name;
+        option.textContent = `${release.tag_name}${release.prerelease ? '（プレリリース）' : ''}`;
+        versionSelect.append(option);
+      });
+      if (releases.some(release => release.tag_name === previous)) versionSelect.value = previous;
+      versionSelect.disabled = releases.length === 0;
+      updateAssets();
+    }
+    osSelect.addEventListener('change', updateAssets);
+    versionSelect.addEventListener('change', updateAssets);
+    formatSelect.addEventListener('change', () => { button.href = formatSelect.value; });
+    fetch(releasesUrl, { headers: { Accept: 'application/vnd.github+json' } })
+      .then(response => { if (!response.ok) throw new Error('release list unavailable'); return response.json(); })
+      .then(data => {
+        releases = data.filter(release => !release.draft && release.assets?.length).sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+        if (!releases.length) throw new Error('no releases');
+        updateVersions();
+      })
+      .catch(() => {
+        versionSelect.replaceChildren(new Option('一覧を取得できません', ''));
+        status.textContent = 'バージョン一覧を取得できませんでした。GitHub Releasesから直接ダウンロードしてください。';
+        button.href = 'https://github.com/rumo-dev/yasashii-git/releases/latest';
+        button.setAttribute('aria-disabled', 'false');
+        button.textContent = '最新版を確認 ↗';
+      });
+  </script>
+</KnowledgeLayout>

@@ -16,7 +16,7 @@ const showMenu = Astro.props.showMenu ?? false;
   </a>
   <nav class="global-nav" aria-label="メインメニュー">
     {pages.map((page) => <a href={page.href} aria-current={Astro.url.pathname === new URL(page.href, Astro.url).pathname ? 'page' : undefined}>{page.label}</a>)}
-    <a class="download-nav-link" href="https://github.com/rumo-dev/yasashii-git/releases/latest" aria-label="やさしいGitの最新版をダウンロード（GitHub Releases）">ダウンロード <span aria-hidden="true">↗</span></a>
+    <a class="download-nav-link" href={`${base}download/`} aria-label="OSとバージョンを選んでやさしいGitをダウンロード">ダウンロード <span aria-hidden="true">↗</span></a>
   </nav>
   {showMenu && <button class="menu-toggle" aria-expanded="false" aria-controls="sidebar">目次</button>}
   <a class="github-link" href="https://github.com/rumo-dev/yasashii-git">GitHubを見る ↗</a>
