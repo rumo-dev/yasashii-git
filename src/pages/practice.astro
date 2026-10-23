@@ -1,0 +1,32 @@
+---
+import KnowledgeLayout from '../layouts/KnowledgeLayout.astro';
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+---
+<KnowledgeLayout title="Gitの3分ミニ練習｜やさしいGit" description="ファイル変更・コミット・プッシュをブラウザー上のミニ体験で学ぶ、Git初心者向けの無料練習ページです。">
+  <header class="article-hero practice-hero">
+    <a class="back-home" href={base}>← ガイドのトップ</a><p class="eyebrow">TRY IT · さわって覚える</p>
+    <h1>まずはここで、<br /><em>Gitの流れを試してみよう。</em></h1>
+    <p>実際のファイルやGitHubには何も変更を加えません。ボタンを押しながら、変更・記録・共有の順番を体験できます。</p>
+    <div class="reading-meta"><span>⏱ 約3分</span><span>🧪 安全な練習</span><span>何度でもやり直せる</span></div>
+  </header>
+  <article class="article-body practice-body">
+    <section class="lesson-block"><p class="eyebrow">MINI SIMULATOR</p><h2>変更を記録してGitHubへ送る</h2>
+      <p>下のボタンを順番に押してみてください。どの段階で、変更がどこにあるかも表示します。</p>
+      <div class="git-simulator" data-git-practice>
+        <div class="sim-status" id="practice-status" aria-live="polite"><span class="sim-dot"></span><div><strong>作業前</strong><small>ファイルはまだ変更されていません。</small></div></div>
+        <div class="sim-lanes"><div class="sim-lane"><small>あなたのPC</small><span data-lane="file">📄 ファイル</span><span data-lane="record">📸 記録</span></div><div class="sim-connector">⇄</div><div class="sim-lane remote"><small>GitHub</small><span data-lane="remote">☁️ 共有先</span></div></div>
+        <div class="sim-actions"><button type="button" data-stage="change">1. ファイルを変更</button><button type="button" data-stage="commit" disabled>2. 変更を記録</button><button type="button" data-stage="push" disabled>3. GitHubへ共有</button><button type="button" class="sim-reset" data-stage="reset">最初から</button></div>
+        <ol class="sim-log" id="practice-log" aria-label="練習の記録"><li class="current">まだ何もしていません。最初のボタンを押してください。</li></ol>
+      </div>
+      <div class="two-column-explain"><div><h3>記録したとき</h3><p>自分のPCに変更の記録ができます。まだGitHubや仲間には届きません。</p></div><div><h3>共有したとき</h3><p>記録がGitHubへ送られます。チームで使う場合は、変更の提案を作ってレビューを依頼できます。</p></div></div>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">QUICK QUIZ</p><h2>3問クイズでおさらい</h2><p>答えを選ぶと、すぐに解説が表示されます。</p>
+      <div class="quiz-question" data-quiz><h3>1. 記録（commit）をした直後、変更はどこにありますか？</h3><div class="quiz-options"><button type="button" data-correct="true">自分のPC</button><button type="button">GitHub</button></div><p class="quiz-feedback" aria-live="polite"></p></div>
+      <div class="quiz-question" data-quiz><h3>2. GitHubにある新しい記録を自分のPCへ取り込む操作は？</h3><div class="quiz-options"><button type="button">アップロード（push）</button><button type="button" data-correct="true">取り込み（pull）</button><button type="button">記録（commit）</button></div><p class="quiz-feedback" aria-live="polite"></p></div>
+      <div class="quiz-question" data-quiz><h3>3. 仲間に変更を確認してもらうための提案は？</h3><div class="quiz-options"><button type="button">ブランチ（branch）</button><button type="button" data-correct="true">変更の提案（Pull Request）</button></div><p class="quiz-feedback" aria-live="polite"></p></div>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">NEXT STEP</p><h2>体験できたら、本物のプロジェクトで</h2><p>練習の流れをアプリで試すなら、チュートリアルに沿って小さな変更を作り、記録と共有をしてみましょう。</p>
+      <a class="next-lesson" href={`${base}app-guide/#daily`}><span><small>次に読む</small><strong>やさしいGitで変更を記録して共有する</strong></span><b>→</b></a>
+    </section>
+  </article>
+</KnowledgeLayout>
