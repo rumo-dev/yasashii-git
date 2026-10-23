@@ -207,7 +207,9 @@ Views.tasks = (() => {
     const target = refreshed.local.find((b) => b.name === base);
     if (target.behind > 0) throw new Error(`「${base}」にサーバー上の更新が ${target.behind} 件あります。先に「最新を取り込む」で更新してから完了してください。`);
     await withBusyThrow('取り込み先へ切り替え中…', () => G('switchBranch', base));
-    const merged = await withBusyThrow('タスクの変更を取り込み中…', () => G('merge', branch));
+    // 早送り合流だと履歴が一直線になり、タスク用に分岐したことが見えなくなる。
+    // タスクの完了は明示的な合流記録を残して、履歴図にも分岐を表示する。
+    const merged = await withBusyThrow('タスクの変更を取り込み中…', () => G('merge', branch, { noFastForward: true }));
     if (merged && merged.conflict) throw new Error('取り込みで競合が発生しました。競合を解決してから、もう一度完了にしてください。');
     await withBusyThrow('タスクの分岐を削除中…', () => G('deleteBranch', branch));
     await G('removeTaskBranchBinding', branch);
