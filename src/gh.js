@@ -172,18 +172,47 @@ async function ensureGitCredentials() {
  */
 async function authStatus() {
   const a = await available();
-  if (!a.installed) return { installed: false, loggedIn: false, message: a.message };
+  const version = (a.version.match(/\b(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
+  const supportsMultipleAccounts = version.length === 3 && (version[0] > 2 || (version[0] === 2 && version[1] >= 40));
+  if (!a.installed) return { installed: false, loggedIn: false, message: a.message, supportsMultipleAccounts: false };
+  let accounts = [];
+  try {
+    const status = await json(['auth', 'status', '--hostname', 'github.com', '--json', 'hosts']);
+    const hostAccounts = status?.hosts?.['github.com'];
+    if (Array.isArray(hostAccounts)) accounts = hostAccounts
+      .filter((account) => account && account.login)
+      .map((account) => ({ login: account.login, active: !!account.active, state: account.state || '' }));
+  } catch (_) { /* 古い gh でも従来のログイン状態確認を続ける */ }
   const tok = await run(['auth', 'token', '--hostname', 'github.com'], { okCodes: [0, 1, 2] });
   const hasToken = tok.code === 0 && tok.stdout.trim().length > 0;
-  if (!hasToken) return { installed: true, loggedIn: false };
+  if (!hasToken) return { installed: true, loggedIn: false, accounts, cliVersion: a.version, supportsMultipleAccounts };
   const st = await run(['auth', 'status', '--hostname', 'github.com'], { okCodes: [0, 1] });
   if (st.code !== 0 && /invalid|expired|revoked|Bad credentials|HTTP 401|failed to log in/i.test(st.stderr + st.stdout)) {
-    return { installed: true, loggedIn: false, expired: true };
+    return { installed: true, loggedIn: false, expired: true, accounts, cliVersion: a.version, supportsMultipleAccounts };
   }
   let login = '';
   try { login = (await run(['api', 'user', '--jq', '.login'])).stdout.trim(); } catch (_) { /* オフライン等 */ }
+  if (login && !accounts.some((account) => account.login.toLowerCase() === login.toLowerCase())) accounts.unshift({ login, active: true, state: 'success' });
+  if (login && accounts.length) accounts = accounts.map((account) => ({ ...account, active: account.login.toLowerCase() === login.toLowerCase() }));
   await ensureGitCredentials();
-  return { installed: true, loggedIn: true, login };
+  return { installed: true, loggedIn: true, login, accounts, cliVersion: a.version, supportsMultipleAccounts };
+}
+
+async function switchAccount(login) {
+  const a = await available();
+  const version = (a.version.match(/\b(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
+  if (version.length !== 3 || (version[0] < 2 || (version[0] === 2 && version[1] < 40))) throw new GhError('複数アカウントの切り替えには GitHub CLI 2.40 以降が必要です。GitHub CLIを更新してください。', a.version);
+  login = String(login || '').trim();
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(login)) throw new GhError('GitHubのユーザー名を確認できません。', login);
+  const accounts = await json(['auth', 'status', '--hostname', 'github.com', '--json', 'hosts']);
+  const hostAccounts = accounts?.hosts?.['github.com'];
+  if (!Array.isArray(hostAccounts) || !hostAccounts.some((account) => account.login?.toLowerCase() === login.toLowerCase())) {
+    throw new GhError('このGitHubアカウントは登録されていません。', login);
+  }
+  await run(['auth', 'switch', '--hostname', 'github.com', '--user', login]);
+  await run(['auth', 'setup-git', '--hostname', 'github.com'], { okCodes: [0, 1] });
+  gitCredReady = true;
+  return authStatus();
 }
 
 async function loginWithToken(_cwd, token) {
@@ -231,8 +260,10 @@ function loginWeb(onCode) {
   });
 }
 
-async function logout() {
-  await run(['auth', 'logout', '--hostname', 'github.com'], { okCodes: [0, 1] });
+async function logout(login) {
+  const args = ['auth', 'logout', '--hostname', 'github.com'];
+  if (login) args.push('--user', String(login));
+  await run(args, { okCodes: [0, 1] });
   return authStatus();
 }
 
@@ -630,7 +661,7 @@ async function markNotificationRead(id) {
 async function markAllNotificationsRead() { await run(['api', '-X', 'PUT', 'notifications']); return true; }
 
 module.exports = {
-  GhError, friendly, available, installPlan, installCli, extendPath, authStatus, ensureGitCredentials, myNotifications, markNotificationRead, markAllNotificationsRead, refreshGitCredentials, loginWithToken, loginWeb, cancelLogin, logout,
+  GhError, friendly, available, installPlan, installCli, extendPath, authStatus, switchAccount, ensureGitCredentials, myNotifications, markNotificationRead, markAllNotificationsRead, refreshGitCredentials, loginWithToken, loginWeb, cancelLogin, logout,
   listRepos, createRepo, currentRepo, commitAuthorAvatar, listMembers, listSentInvites, inviteMember, cancelSentInvite, removeMember, myInvites, acceptInvite, declineInvite, checkAccess, myLogin, myProfile,
   listReleases, createRelease,
   listActionsTemplates, listLocalActionsWorkflows, readLocalActionsWorkflow, saveLocalActionsWorkflow, createLocalActionsWorkflow,

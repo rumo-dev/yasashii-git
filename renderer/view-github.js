@@ -2,6 +2,8 @@
 /* 「GitHub」画面：ログイン・リポジトリ・変更の提案（PR）・課題（Issue） */
 Views.github = (() => {
   let root, tab = 'account', auth = null, body, prState = 'open', issueState = 'open', repoQuery = '';
+  let addLoginCode = null;
+  api.onGhLoginCode((code) => { if (addLoginCode) addLoginCode.textContent = code; });
 
   function render(container) { root = container; auth = null; draw(); }
   function onStatus() {}
@@ -46,14 +48,70 @@ Views.github = (() => {
       h('p', { class: 'muted' }, S.hasRemote ? 'このプロジェクトは、GitHubとつながっています。「アップロード」ボタンで記録を送れます。' : 'このプロジェクトは、まだGitHubにありません。「アップロード」を押すと自動で作成されます。'),
       h('div', { class: 'btn-row' },
         S.hasRemote ? null : h('button', { class: 'btn primary', onclick: async () => { if (await publishToGitHub({ thenPush: true })) draw(); } }, '☁️ GitHubに作成してアップロード'),
-        h('button', { class: 'btn danger', onclick: logout }, 'ログアウト'))));
+        h('button', { class: 'btn', disabled: !auth.supportsMultipleAccounts, title: auth.supportsMultipleAccounts ? '' : '複数アカウントには GitHub CLI 2.40 以降が必要です', onclick: addAccount }, '＋ 別のアカウントを追加'),
+        h('button', { class: 'btn danger', onclick: () => logout(auth.login) }, 'このアカウントをログアウト'))));
+    if (!auth.supportsMultipleAccounts) body.appendChild(h('p', { class: 'muted', style: { margin: '-4px 4px 14px', fontSize: '12px' } },
+      '複数アカウントを使うには GitHub CLI 2.40 以降が必要です。', h('button', { class: 'link', onclick: () => APP('openExternal', 'https://cli.github.com/') }, 'GitHub CLIを更新')));
+    const accounts = Array.isArray(auth.accounts) && auth.accounts.length ? auth.accounts : (auth.login ? [{ login: auth.login, active: true }] : []);
+    if (accounts.length > 1) {
+      body.appendChild(h('div', { class: 'card' },
+        h('h3', {}, '登録済みのアカウント'),
+        h('p', { class: 'muted' }, '選んだアカウントがGitHubの操作とHTTPSでのアップロードに使われます。'),
+        h('div', { class: 'list' }, accounts.map((account) => h('div', { class: 'row' },
+          h('span', {}, account.active ? '🟢' : '👤'),
+          h('div', { class: 'grow' }, h('b', {}, account.login), account.active ? h('span', { class: 'pill', style: { marginLeft: '8px' } }, '使用中') : null),
+          account.active ? null : h('button', { class: 'btn small primary', onclick: () => switchToAccount(account.login) }, '切り替える'),
+          account.active ? null : h('button', { class: 'btn small danger', onclick: () => logout(account.login) }, 'ログアウト'))))));
+    }
   }
 
-  async function logout() {
-    const ok = await confirmDialog({ title: 'ログアウトしますか？', message: 'ログアウトすると、もう一度ログインするまでアプリを使えません。', okLabel: 'ログアウト', danger: true });
+  async function addAccount() {
+    const code = h('div', { class: 'mono gate-code' }, 'コードを取得しています…');
+    let cancelButton = null;
+    addLoginCode = code;
+    const dialogTask = modal({
+      title: 'GitHubアカウントを追加',
+      body: h('div', {}, h('p', { style: { marginTop: 0 } }, 'ブラウザーで追加したいアカウントを選び、次の確認コードを入力してください。認証が終わると、このアカウントが使用中になります。'), code),
+      buttons: [{ label: 'キャンセル', value: false }],
+      onOpen: (dialog) => { cancelButton = dialog.querySelector('footer button'); },
+    });
+    const loginTask = api.ghLoginWeb().then((result) => ({ result }), (error) => ({ error }));
+    const winner = await Promise.race([dialogTask.then(() => ({ cancelled: true })), loginTask]);
+    addLoginCode = null;
+    if (winner.cancelled) { await GH('cancelLogin').catch(() => {}); return; }
+    cancelButton?.click();
+    if (winner.error) { await showError(winner.error); return; }
+    auth = winner.result;
+    S.auth = winner.result;
+    await ensureGitUser({ notify: false });
+    toast(`GitHubアカウント「${auth.login}」を追加しました`);
+    draw();
+  }
+
+  async function switchToAccount(login) {
+    const next = await withBusy(`「${login}」に切り替え中…`, () => GH('switchAccount', login));
+    if (!next) return;
+    auth = next;
+    S.auth = next;
+    await ensureGitUser({ notify: false });
+    toast(`GitHubアカウントを「${login}」に切り替えました`);
+    draw();
+  }
+
+  async function logout(login) {
+    const isActive = login?.toLowerCase() === auth.login?.toLowerCase();
+    const remaining = (auth.accounts || []).filter((account) => account.login.toLowerCase() !== String(login || '').toLowerCase()).length;
+    const message = remaining ? `「${login}」をこのアプリからログアウトします。${isActive ? '別の登録済みアカウントが使用中になります。' : ''}` : 'ログアウトすると、もう一度ログインするまでGitHubの機能を使えなくなります。';
+    const ok = await confirmDialog({ title: `「${login || '現在のアカウント'}」をログアウトしますか？`, message, okLabel: 'ログアウト', danger: true });
     if (!ok) return;
-    const r = await withBusy('処理中…', () => GH('logout'));
-    if (r) relogin();
+    const r = await withBusy('処理中…', () => GH('logout', login));
+    if (!r) return;
+    if (r.loggedIn) {
+      auth = r;
+      S.auth = r;
+      toast(`「${login}」をログアウトしました`);
+      draw();
+    } else relogin();
   }
 
   /* ---------------- リポジトリ ---------------- */
