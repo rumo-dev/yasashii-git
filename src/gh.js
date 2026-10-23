@@ -258,6 +258,17 @@ async function currentRepo(cwd) {
   catch (e) { return null; }
 }
 
+const repoInfoCache = new Map();
+async function commitAuthorAvatar(cwd, hash) {
+  if (!/^[a-f0-9]{7,40}$/i.test(String(hash || ''))) return null;
+  if (!repoInfoCache.has(cwd)) repoInfoCache.set(cwd, currentRepo(cwd));
+  const repo = await repoInfoCache.get(cwd);
+  if (!repo || !repo.nameWithOwner) return null;
+  checkRef(repo.nameWithOwner);
+  const r = await run(['api', `repos/${repo.nameWithOwner}/commits/${hash}`, '--jq', '.author.avatar_url // empty'], { cwd });
+  return r.stdout.trim() || null;
+}
+
 /* ------------------------ 変更の提案（PR） ------------------------ */
 const PR_FIELDS = 'number,title,author,state,url,headRefName,baseRefName,isDraft,createdAt,updatedAt';
 async function listPRs(cwd, state = 'open') {
@@ -620,7 +631,7 @@ async function markAllNotificationsRead() { await run(['api', '-X', 'PUT', 'noti
 
 module.exports = {
   GhError, friendly, available, installPlan, installCli, extendPath, authStatus, ensureGitCredentials, myNotifications, markNotificationRead, markAllNotificationsRead, refreshGitCredentials, loginWithToken, loginWeb, cancelLogin, logout,
-  listRepos, createRepo, currentRepo, listMembers, listSentInvites, inviteMember, cancelSentInvite, removeMember, myInvites, acceptInvite, declineInvite, checkAccess, myLogin, myProfile,
+  listRepos, createRepo, currentRepo, commitAuthorAvatar, listMembers, listSentInvites, inviteMember, cancelSentInvite, removeMember, myInvites, acceptInvite, declineInvite, checkAccess, myLogin, myProfile,
   listReleases, createRelease,
   listActionsTemplates, listLocalActionsWorkflows, readLocalActionsWorkflow, saveLocalActionsWorkflow, createLocalActionsWorkflow,
   listActionsWorkflows, listActionsRuns, runActionsWorkflow, setActionsWorkflowEnabled, getActionsRun, getActionsRunLog, cancelActionsRun, rerunActionsRun,

@@ -203,6 +203,16 @@ Views.branches = (() => {
   }
   async function mergeInto(name) {
     const cur = S.status.branch || '今の場所';
+    try {
+      const comparison = await withBusyThrow('合流前の変更を比べています…', () => G('compareBranches', name));
+      const preview = h('div', {},
+        h('p', { class: 'muted', style: { whiteSpace: 'pre-wrap' } }, `「${cur}」に「${name}」を合流すると入る変更です。共通の元の記録：${comparison.base || 'なし'}`),
+        h('pre', { class: 'mono', style: { whiteSpace: 'pre-wrap', overflow: 'auto', maxHeight: '120px', padding: '8px', background: 'var(--panel2)', borderRadius: '6px' } }, comparison.stat || '追加の変更はありません。'),
+        h('details', {}, h('summary', { style: { cursor: 'pointer', marginBottom: '8px' } }, 'ファイルごとの差分を見る'), renderDiff(comparison.diff)));
+      const proceed = await modal({ title: '合流前の変更確認', body: preview, wide: true,
+        buttons: [{ label: 'キャンセル', value: false }, { label: '合流の設定へ', kind: 'primary', value: true }] });
+      if (!proceed) return;
+    } catch (e) { await showError(e); return; }
     const r = await formDialog({ title: `${jp('merge')}する`, okLabel: '合流する',
       intro: `「${name}」の作業内容を、いまの分岐「${cur}」に取り込みます。\n同じ場所を別々に変更していた場合は、どちらを採用するか選ぶ画面になります。`,
       fields: [{ key: 'noff', label: '合流した記録を必ず残す', type: 'checkbox', value: false, help: '履歴に「ここで合流した」という記録が残り、あとから分かりやすくなります。' }] });

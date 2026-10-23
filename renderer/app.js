@@ -33,6 +33,11 @@ async function init() {
   startAuthWatch(); // ログインの有効期限切れを、操作していない間も見張る
   $('#glossaryBtn').onclick = showGlossary;
   $('#repoSwitch').onclick = repoSwitcher;
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !e.shiftKey && !e.altKey) {
+      e.preventDefault(); openCommandPalette();
+    }
+  });
   window.addEventListener('focus', () => refreshStatus(true));
   setInterval(() => { if (S.repo && document.hasFocus() && !isBusy()) refreshStatus(true); }, 5000);
   setInterval(autoFetchTick, 30000);
@@ -128,6 +133,41 @@ function onMenu(name) {
   if (name === 'update') { Upd.checkNow(); return; } // 更新の確認は、ログイン前でもできる
   if (!S.auth) return; // ログイン前は操作できない
   ({ open: openFolderFlow, init: initFlow, clone: cloneFlow, fetch: doFetch, sync: doSyncAll, pull: doPull, push: doPush, refresh: () => refreshStatus(false), glossary: showGlossary }[name] || (() => {}))();
+}
+
+/** Ctrl+Kでアプリ内の画面・よく使う操作を検索して実行する */
+function openCommandPalette() {
+  if (document.querySelector('.command-overlay')) return;
+  const items = [
+    ...NAV.map((n) => ({ label: `${n.ico} ${n.label}を開く`, keywords: n.id, run: () => go(n.id, true) })),
+    { label: '🔄 画面を更新', keywords: 'refresh reload', run: () => refreshAll() },
+    { label: '☁️ サーバーの更新を確認', keywords: 'fetch remote', run: doFetch },
+    { label: '⬇️ 最新の内容を取り込む', keywords: 'pull download', run: doPull },
+    { label: '⬆️ 変更をアップロード', keywords: 'push upload', run: doPush },
+    { label: '📂 フォルダを開く', keywords: 'open folder repository', run: openFolderFlow },
+    { label: '📖 用語の対応表', keywords: 'glossary help', run: showGlossary },
+  ].filter((item) => S.repo || ['フォルダ', 'glossary', 'help'].some((k) => `${item.label} ${item.keywords}`.toLowerCase().includes(k)));
+  const overlay = h('div', { class: 'overlay command-overlay' });
+  const input = h('input', { type: 'search', placeholder: '画面や操作を検索…', style: { width: '100%', marginBottom: '10px' } });
+  const list = h('div', { style: { maxHeight: '55vh', overflow: 'auto' } });
+  const close = () => { document.removeEventListener('keydown', keyHandler, true); overlay.remove(); };
+  const draw = () => {
+    clear(list);
+    const q = input.value.trim().toLocaleLowerCase();
+    const matches = items.filter((x) => !q || `${x.label} ${x.keywords}`.toLocaleLowerCase().includes(q));
+    if (!matches.length) list.appendChild(h('div', { class: 'empty' }, '一致する操作がありません。'));
+    matches.forEach((item) => list.appendChild(h('button', { class: 'btn', style: { display: 'flex', width: '100%', justifyContent: 'flex-start', marginBottom: '4px' }, onclick: async () => { close(); await item.run(); } }, item.label)));
+  };
+  const keyHandler = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'Enter') { const first = list.querySelector('button'); if (first) { e.preventDefault(); first.click(); } }
+  };
+  input.addEventListener('input', draw);
+  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
+  overlay.appendChild(h('div', { class: 'modal wide', role: 'dialog', 'aria-modal': 'true' }, h('header', {}, '操作を検索　⌘/Ctrl + K'), h('div', { class: 'mbody' }, input, list), h('footer', {}, h('button', { class: 'btn', onclick: close }, '閉じる'))));
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', keyHandler, true);
+  draw(); input.focus();
 }
 
 /* ------------------------------ はじめの画面 ------------------------------ */

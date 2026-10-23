@@ -111,6 +111,7 @@ Views.changes = (() => {
       conflicts.map((f) => h('div', { style: { borderTop: '1px solid var(--border)', padding: '6px 0' } },
         h('div', { class: 'file-row' + (sel && sel.path === f.path ? ' selected' : ''), style: { border: 0, padding: '2px 0' }, onclick: () => select({ path: f.path, mode: 'conflict' }) }, h('span', { class: 'st U' }, 'ぶつかり'), h('span', { class: 'name' }, f.path)),
         h('div', { class: 'btn-row' },
+          h('button', { class: 'btn small primary', onclick: () => openThreeWay(f.path) }, '3つの版を比べて解決'),
           h('button', { class: 'btn small', onclick: () => resolve(f.path, 'ours') }, '自分の版を採用'),
           h('button', { class: 'btn small', onclick: () => resolve(f.path, 'theirs') }, '取り込む側の版を採用'),
           h('button', { class: 'btn small', onclick: () => APP('openFile', S.repo, f.path).catch(showError) }, '開いて手で直す'),
@@ -119,6 +120,28 @@ Views.changes = (() => {
         h('button', { class: 'btn primary', disabled: conflicts.length > 0, onclick: finishOp }, '✔ ' + name + 'を完了する'),
         h('button', { class: 'btn danger', onclick: abortOp }, 'やめて元に戻す')));
     opEl.appendChild(box);
+  }
+  async function openThreeWay(file) {
+    let versions;
+    try { versions = await G('conflictStages', file); } catch (e) { await showError(e); return; }
+    const editor = h('textarea', { rows: 14, value: versions.current || '', class: 'code-input', style: { width: '100%', minHeight: '220px', resize: 'vertical', whiteSpace: 'pre', tabSize: 2 } });
+    const pane = (title, key) => h('div', { style: { minWidth: 0 } },
+      h('b', {}, title),
+      h('pre', { class: 'mono', style: { whiteSpace: 'pre-wrap', overflow: 'auto', maxHeight: '180px', padding: '8px', background: 'var(--panel2)', borderRadius: '6px', fontSize: '11px' } }, versions[key] == null ? 'この版にはファイルがありません。' : versions[key]));
+    const body = h('div', {},
+      h('p', { class: 'muted' }, '共通の元の版、自分の版、取り込む側の版を見比べて、下の欄に残す内容を作ります。保存するとこの内容で解決済みになります。'),
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '8px' } }, pane('共通の元の版', 'base'), pane('自分の版', 'ours'), pane('取り込む側の版', 'theirs')),
+      h('label', { class: 'field', style: { display: 'block', marginTop: '12px' } }, h('span', {}, '解決後の内容'), editor));
+    const result = await modal({ title: `競合を解決：${file}`, body, wide: true, buttons: [
+      { label: 'キャンセル', value: false },
+      { label: '共通の元の版を使う', value: () => ({ content: versions.base }) },
+      { label: '自分の版を使う', value: () => ({ content: versions.ours }) },
+      { label: '取り込む側の版を使う', value: () => ({ content: versions.theirs }) },
+      { label: 'この内容で解決', kind: 'primary', value: () => ({ content: editor.value }) },
+    ] });
+    if (!result || result.content == null) return;
+    const ok = await withBusy('解決内容を保存中…', () => G('writeResolvedConflict', file, result.content));
+    if (ok) await refreshAll();
   }
   async function resolve(path, side) { const r = await withBusy('反映中…', () => G('resolveConflict', path, side)); if (r !== undefined) { await refreshAll(); } }
   async function resolveManual(path) {

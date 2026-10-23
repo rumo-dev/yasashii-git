@@ -500,6 +500,27 @@ async function commitDiff(repo, hash, file) {
   return clip(await out(repo, args));
 }
 
+/** ローカル履歴の移動記録。消えた記録や分岐を安全に探すために使う。 */
+async function reflog(repo, { limit = 100 } = {}) {
+  const fmt = ['%H', '%gD', '%gs', '%gN', '%aI'].join(FS) + RS;
+  const raw = await out(repo, ['reflog', 'show', `-n${Math.max(1, Math.min(500, limit))}`, `--format=${fmt}`, '--date=iso-strict', 'HEAD']);
+  return raw.split(RS).map((r) => r.replace(/^\n/, '')).filter(Boolean).map((rec) => {
+    const [hash, selector, subject, actor, date] = rec.split(FS);
+    return { hash, short: (hash || '').slice(0, 7), selector, subject, actor, date };
+  });
+}
+
+/** reflog上の記録を新しい救出分岐に固定して切り替える。 */
+async function recoverFromReflog(repo, hash, name) {
+  name = (name || '').trim();
+  if (!name) throw new GitError('救出用の分岐名を入力してください。', '');
+  await validateBranchName(repo, name);
+  const exists = await run(['show-ref', '--verify', '--quiet', `refs/heads/${name}`], { cwd: repo, okCodes: [0, 1] });
+  if (exists.code === 0) throw new GitError(`分岐「${name}」はすでにあります。別の名前を使ってください。`, name);
+  await run(['switch', '-c', name, hash], { cwd: repo });
+  return true;
+}
+
 async function revertCommit(repo, hash) {
   const parents = (await out(repo, ['rev-list', '--parents', '-n1', hash])).trim().split(' ').length - 1;
   const args = ['revert', '--no-edit'];
@@ -785,6 +806,16 @@ async function merge(repo, name, { noFastForward = false } = {}) {
   return { conflict: false, upToDate: /Already up to date/i.test(r.stdout) };
 }
 
+/** 合流前の変更一覧と差分を返す。 */
+async function compareBranches(repo, name) {
+  const st = await status(repo);
+  if (!st.branch) throw new GitError('分岐に切り替えてから比較してください。', 'detached HEAD');
+  const base = (await out(repo, ['merge-base', 'HEAD', name])).trim();
+  const stat = await out(repo, ['diff', '--stat', '--find-renames', 'HEAD...'+name]);
+  const diffText = clip(await out(repo, ['diff', '--no-color', '--find-renames', 'HEAD...'+name]));
+  return { current: st.branch, target: name, base: base.slice(0, 12), stat, diff: diffText };
+}
+
 async function abortOperation(repo) {
   const st = await status(repo);
   const op = st.operation;
@@ -818,6 +849,27 @@ async function resolveConflict(repo, file, side) {
     // 片方が削除していた場合など
     await run(['rm', '-q', '--', file], { cwd: repo });
   }
+  return true;
+}
+async function conflictStages(repo, file) {
+  insideRepo(repo, file);
+  const stages = {};
+  for (const [key, stage] of [['base', 1], ['ours', 2], ['theirs', 3]]) {
+    const r = await run(['show', `:${stage}:${file}`], { cwd: repo, okCodes: [0, 128] });
+    stages[key] = r.code === 0 ? clip(r.stdout, 500000) : null;
+  }
+  const abs = insideRepo(repo, file);
+  stages.current = fs.existsSync(abs) ? clip(fs.readFileSync(abs, 'utf8'), 500000) : '';
+  return stages;
+}
+async function writeResolvedConflict(repo, file, content) {
+  const abs = insideRepo(repo, file);
+  if (content == null) fs.rmSync(abs, { force: true });
+  else {
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, String(content), 'utf8');
+  }
+  await run(['add', '-A', '--', file], { cwd: repo });
   return true;
 }
 async function markResolved(repo, file) { await run(['add', '--', file], { cwd: repo }); return true; }
@@ -1135,9 +1187,9 @@ module.exports = {
   status, diff, applyPatch,
   stage, stageAll, unstage, unstageAll, discard,
   commit, undoLastCommit, lastCommitMessage,
-  log, commitFiles, commitDiff, revertCommit, cherryPick, resetTo,
+  log, commitFiles, commitDiff, reflog, recoverFromReflog, revertCommit, cherryPick, resetTo,
   branches, createBranch, initializeGitFlow, gitFlowConfig, beginGitFlowBranch, finishGitFlowBranch, createTaskBranch, getTaskBranch, bindTaskBranch, removeTaskBranchBinding, switchBranch, switchToCommit, deleteBranch, deleteRemoteBranch, renameBranch,
-  merge, abortOperation, continueOperation, resolveConflict, markResolved,
+  merge, compareBranches, abortOperation, continueOperation, resolveConflict, conflictStages, writeResolvedConflict, markResolved,
   remotes, addRemote, removeRemote, setRemoteUrl, fetch, linkUpstream, prepareSync, pull, push,
   stashList, stashSave, stashApply, stashPop, stashDrop, stashDiff,
   tags, createTag, releaseDraft, deleteTag, pushTag, deleteRemoteTag,
