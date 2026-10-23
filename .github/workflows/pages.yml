@@ -33,7 +33,7 @@ jobs:
       - name: Node.js を設定
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: npm
       - name: 依存関係をインストール
         run: npm ci
