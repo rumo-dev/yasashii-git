@@ -68,6 +68,12 @@ GitとGitHub CLIが必要です。アプリ起動時にGitHubへログインし�
 
 アプリ内の「バグ報告・要望」から、不具合の報告や機能の提案を投稿できます。投稿とコメントはGitHub上で公開されるため、パスワードや個人情報などを書かないでください。
 
+## チュートリアルサイト
+
+初心者向けの使い方、チーム開発の流れ、開発者向けの手順は [チュートリアルサイト](https://rumo-dev.github.io/yasashii-git/) をご覧ください。サイトのソースは `docs/` にあります。
+
+GitHub Pages は `.github/workflows/pages.yml` から公開します。初回のみ、GitHubリポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定してください。その後 `main` ブランチの `docs/` または公開ワークフローへの変更を push すると、自動でデプロイされます。Actions タブで「GitHub Pages に公開」の実行結果を確認できます。
+
 ## 開発者向け
 
 Node.js と Git をインストールした環境で、プロジェクトのフォルダから実行してください。
