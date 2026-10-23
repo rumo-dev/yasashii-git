@@ -88,9 +88,17 @@ GitとGitHub CLIが必要です。アプリ起動時にGitHubへログインし�
 
 ## チュートリアルサイト
 
-初心者向けの使い方、チーム開発の流れ、開発者向けの手順は [チュートリアルサイト](https://rumo-dev.github.io/yasashii-git/) をご覧ください。サイトのソースは `docs/` にあります。
+初心者向けの使い方、チーム開発の流れ、開発者向けの手順は [チュートリアルサイト](https://rumo-dev.github.io/yasashii-git/) をご覧ください。Astroで構築し、ページのソースは `src/`、静的ファイルは `public/` にあります。
 
-GitHub Pages は `.github/workflows/pages.yml` から公開します。初回のみ、GitHubリポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定してください。その後 `main` ブランチの `docs/` または公開ワークフローへの変更を push すると、自動でデプロイされます。Actions タブで「GitHub Pages に公開」の実行結果を確認できます。
+GitHub Pages は `.github/workflows/pages.yml` から公開します。初回のみ、GitHubリポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定してください。その後 `main` ブランチのサイトソース、依存関係、公開ワークフローへの変更を push すると、自動でビルド・デプロイされます。Actions タブで「GitHub Pages に公開」の実行結果を確認できます。
+
+サイトをローカルで編集・確認する場合は、`npm install` のあとに次のコマンドを使います。
+
+```sh
+npm run site:dev
+npm run site:build
+npm run site:preview
+```
 
 ## 開発者向け
 

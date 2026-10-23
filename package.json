@@ -10,6 +10,9 @@
     "start": "electron .",
     "test": "node test/git.test.js && node test/updater.test.js && node test/auth.test.js && node test/release.test.js",
     "test:ui": "python3 test/ui_login_upload.py && python3 test/ui_gituser.py && python3 test/ui_memo.py && python3 test/ui_safety.py && python3 test/ui_team.py && python3 test/ui_update_auth.py && python3 test/ui_inbox.py && python3 test/ui_release.py && python3 test/ui_smoke.py && python3 test/ui_gh_missing.py",
+    "site:dev": "astro dev",
+    "site:build": "astro build",
+    "site:preview": "astro preview",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
@@ -18,6 +21,7 @@
   },
   "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
+    "astro": "^7.4.2",
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8"
   },
