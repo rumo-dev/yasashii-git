@@ -114,10 +114,16 @@ async function launchTerminal(repo) {
   if (process.platform === 'win32') {
     const local = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
     const wt = findOnPath(['wt.exe']) || path.join(local, 'Microsoft', 'WindowsApps', 'wt.exe');
-    if (executable(wt)) return startDetached(wt, ['-d', dir], { windowsHide: false });
-    const ps = findOnPath(['pwsh.exe', 'powershell.exe']) || 'powershell.exe';
-    const command = `Set-Location -LiteralPath '${dir.replace(/'/g, "''")}'`;
-    return startDetached(ps, ['-NoExit', '-Command', command], { windowsHide: false });
+    if (executable(wt)) {
+      try { return await startDetached(wt, ['-d', dir], { cwd: dir, windowsHide: false }); }
+      catch (_) { /* Windows Terminal が起動できない場合は PowerShell に切り替える */ }
+    }
+    // Electron は GUI アプリなので、PowerShell を直接起動するとコンソール窓が表示されない環境がある。
+    // cmd の start を経由して新しいコンソールを作り、パスは PowerShell の EncodedCommand で安全に渡す。
+    const psCommand = `Set-Location -LiteralPath '${dir.replace(/'/g, "''")}'`;
+    const encoded = Buffer.from(psCommand, 'utf16le').toString('base64');
+    const command = `start "" powershell.exe -NoLogo -NoExit -EncodedCommand ${encoded}`;
+    return startDetached(process.env.ComSpec || 'cmd.exe', ['/d', '/c', command], { cwd: dir });
   }
   if (process.platform === 'darwin') {
     const command = `cd '${dir.replace(/'/g, "'\\''")}'`;
