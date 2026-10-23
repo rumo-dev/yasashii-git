@@ -410,6 +410,7 @@ function updateChrome() {
     h('button', { class: 'btn' + (st.behind ? ' primary' : ''), disabled: !st.behind, title: st.behind ? hint('pull') : '取り込む更新はありません', onclick: doPull }, '⬇️ ', termLabel('pull'), h('span', { class: 'badge' }, '↓' + (st.behind || 0))),
     h('button', { class: 'btn' + (st.ahead ? ' primary' : ''), disabled: !st.ahead, title: st.ahead ? hint('push') : 'アップロードする記録はありません', onclick: doPush }, '⬆️ ', termLabel('push'), h('span', { class: 'badge' }, '↑' + (st.ahead || 0))),
     h('button', { class: 'btn ghost', title: 'エクスプローラー / Finder でフォルダを開く', onclick: () => APP('openFolder', S.repo) }, '📂'),
+    h('button', { class: 'btn ghost', title: 'やさしいGitのチュートリアルサイトをブラウザーで開く', onclick: () => APP('openExternal', 'https://rumo-dev.github.io/yasashii-git/').catch(showError) }, '📖 チュートリアル'),
   ].filter(Boolean).forEach((el) => bar.appendChild(el));
   // ヒント
   const hnt = $('#hint');
