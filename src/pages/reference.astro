@@ -1,0 +1,38 @@
+---
+import KnowledgeLayout from '../layouts/KnowledgeLayout.astro';
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const terms = [
+  ['リポジトリ', 'プロジェクトのファイルと変更履歴をまとめて管理する場所。'],
+  ['コミット（commit）', '選んだ変更をひとまとまりとして記録すること。'],
+  ['プッシュ（push）', '自分のPCにある記録をGitHubへ送ること。'],
+  ['プル（pull）', 'GitHubにある新しい記録を自分のPCへ取り込むこと。'],
+  ['ブランチ（branch）', '本流から作業を分け、別の変更を進めるための道筋。'],
+  ['マージ（merge）', '別々に進めた変更を一つにまとめること。'],
+  ['差分（diff）', '二つの状態を比べて、追加・削除・変更された箇所を示したもの。'],
+  ['リモート', 'GitHubなど、ネットワーク上にある共有先。'],
+  ['クローン（clone）', 'リモートのリポジトリをPCに複製して作業を始めること。'],
+  ['プルリクエスト（Pull Request）', '変更を確認してもらい、取り込みを相談するための提案。'],
+  ['競合（conflict）', '同じ場所に異なる変更があり、自分たちで残す内容を決める状態。'],
+  ['.gitignore', 'Gitの記録に含めないファイルやフォルダを指定する設定。'],
+];
+---
+<KnowledgeLayout title="Git・GitHub用語集とFAQ｜やさしいGit" description="Git初心者向け用語集と、アップロードできない・競合したなどのよくある質問をまとめました。">
+  <header class="article-hero reference-hero">
+    <a class="back-home" href={base}>← ガイドのトップ</a><p class="eyebrow">REFERENCE · いつでも引ける</p>
+    <h1>用語もトラブルも、<br /><em>ここで一緒に整理しよう。</em></h1>
+    <p>初めての言葉は、何度でも調べて大丈夫。よく使うGit用語と、つまずいたときの確認ポイントをまとめました。</p>
+    <div class="reading-meta"><span>📚 用語集</span><span>🛟 困ったとき</span><span>いつでも見返せる</span></div>
+  </header>
+  <article class="article-body reference-body">
+    <section class="lesson-block"><p class="eyebrow">GLOSSARY</p><h2>Git・GitHubのやさしい用語集</h2><div class="glossary-list">{terms.map(([term, description]) => <div class="glossary-row"><dt>{term}</dt><dd>{description}</dd></div>)}</div></section>
+    <section class="lesson-block"><p class="eyebrow">COMMON QUESTIONS</p><h2>よくある「どうしよう？」</h2>
+      <details class="faq-item"><summary>アップロードができません</summary><p>まずインターネット接続、GitHubへのログイン、現在の作業先を確認します。GitHub側に自分の記録にない新しい変更がある場合は、先に更新を取り込む必要があります。表示されたエラー文を控え、無理に強制アップロードしないでください。</p></details>
+      <details class="faq-item"><summary>「競合」と表示されました</summary><p>自分と仲間が同じファイルの同じ場所を編集した可能性があります。競合したファイルを開き、双方の内容を確認して、残す内容を決めます。判断できないときは、そのファイルを編集した人に相談しましょう。</p></details>
+      <details class="faq-item"><summary>記録した変更を取り消したいです</summary><p>すでにGitHubへ共有した記録かどうかで方法が変わります。共有済みの履歴を書き換えると、仲間の作業に影響することがあります。履歴画面の「取り消しの記録を作る」など、履歴を保つ方法を優先してください。</p></details>
+      <details class="faq-item"><summary>パスワードやAPIキーをアップロードしてしまいました</summary><p>ファイルから消すだけでは履歴に残る場合があります。まず該当するパスワードやキーを無効化・再発行し、リポジトリの管理者にすぐ連絡してください。公開リポジトリの場合は特に急いで対応します。</p></details>
+      <details class="faq-item"><summary>GitHubに変更が表示されません</summary><p>記録しただけではPC内に保存された状態です。GitHubへ送る「アップロード」まで完了したか、変更を送った先のブランチが正しいか確認してください。</p></details>
+      <details class="faq-item"><summary>用語を日本語から英語へ切り替えたいです</summary><p>やさしいGitの「設定」から、Git用語の表示方法を選べます。操作の意味を知りたい間は日本語表示、GitHubの画面やコマンドに慣れたら英語併記にするのもおすすめです。</p></details>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">KEEP LEARNING</p><h2>次に読みたいガイド</h2><div class="reference-links"><a href={`${base}git-basics/`}><span>🌱</span><strong>Gitの基本を知る</strong><small>記録・共有・ブランチのしくみ</small></a><a href={`${base}teamwork/`}><span>🤝</span><strong>チーム開発を知る</strong><small>タスクからレビューまでの流れ</small></a><a href={`${base}app-guide/`}><span>🧭</span><strong>アプリを使ってみる</strong><small>やさしいGitの操作方法</small></a></div></section>
+  </article>
+</KnowledgeLayout>

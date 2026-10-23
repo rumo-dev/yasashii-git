@@ -1,0 +1,27 @@
+---
+import KnowledgeLayout from '../layouts/KnowledgeLayout.astro';
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+---
+<KnowledgeLayout title="チームでGit開発する流れ｜やさしいGit" description="タスクからブランチを作り、変更をレビューして取り込むチーム開発の流れと、競合したときの考え方を解説します。">
+  <header class="article-hero team-hero">
+    <a class="back-home" href={base}>← ガイドのトップ</a><p class="eyebrow">TEAM WORK · みんなで作ろう</p>
+    <h1>ひとりの変更を、<br /><em>チームの力に。</em></h1>
+    <p>自分の作業を小さく分け、仲間と確認しながら本流に届ける。安全でわかりやすいチーム開発の流れを見てみましょう。</p>
+    <div class="reading-meta"><span>📖 約7分</span><span>🤝 チーム開発</span><span>実践ガイド</span></div>
+  </header>
+  <article class="article-body">
+    <section class="lesson-block"><p class="eyebrow">THE TEAM LOOP</p><h2>チーム開発の基本ループ</h2><p>「誰が何を作っているか」を共有し、変更を本流に入れる前に確認するのがポイントです。</p>
+      <div class="team-loop"><article><span>🗒️</span><b>タスクを決める</b><small>何を作るかを共有</small></article><i>→</i><article><span>🌿</span><b>作業を分ける</b><small>専用ブランチで開発</small></article><i>→</i><article><span>📤</span><b>変更を提案</b><small>Pull Requestを作成</small></article><i>→</i><article><span>👀</span><b>レビュー</b><small>仲間と確認・相談</small></article><i>→</i><article><span>🌳</span><b>取り込む</b><small>本流へ合流</small></article></div>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">A PRACTICAL EXAMPLE</p><h2>「プロフィール画面を追加する」場合</h2>
+      <ol class="learning-list"><li><b>1</b><div><strong>タスクにゴールを書く</strong><p>例：「名前と自己紹介を表示する。スマートフォンでも読めること」</p></div></li><li><b>2</b><div><strong>最新の本流からブランチを作る</strong><p><code>feature/profile-page</code> のように、目的が伝わる名前を付けます。</p></div></li><li><b>3</b><div><strong>小さく記録してアップロード</strong><p>「プロフィール画面の枠を追加」「表示内容を整える」のように、後から読んでわかる記録を残します。</p></div></li><li><b>4</b><div><strong>変更の提案を作成</strong><p>何を変えたか、どう確認したかを書き、関連するタスクがあればリンクします。</p></div></li><li><b>5</b><div><strong>レビューを反映して取り込む</strong><p>質問や提案を話し合い、修正を追加してから本流に取り込みます。</p></div></li></ol>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">WHEN CHANGES COLLIDE</p><h2>変更が競合したら</h2><p>同じファイルの同じ場所を別々に編集すると、Gitがどちらを採用するか決められず「競合」になります。壊れたわけではありません。人が内容を確認すれば解決できます。</p>
+      <div class="conflict-steps"><div><b>01</b><strong>あわてず内容を確認</strong><p>競合したファイルと、それぞれの変更を読みます。</p></div><div><b>02</b><strong>残す内容を相談</strong><p>自分の変更、相手の変更、両方を組み合わせる案を比べます。</p></div><div><b>03</b><strong>解決して記録</strong><p>正しい内容を保存し、競合解決を完了して記録します。</p></div></div>
+      <p class="warning-callout">内容がわからない場合は、強制アップロードで上書きせず、作業した人に相談してください。</p>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">TEAM HABITS</p><h2>気持ちよく進める小さな習慣</h2><div class="habit-grid"><div><span>🧩</span><strong>小さく分ける</strong><p>一つの提案に変更を詰め込みすぎない。</p></div><div><span>📝</span><strong>背景も書く</strong><p>何を変えたかだけでなく、理由も共有。</p></div><div><span>💬</span><strong>早めに相談</strong><p>迷っている段階で声をかける。</p></div><div><span>🌼</span><strong>人に向けて話す</strong><p>コードを見て、相手を責めずに相談。</p></div></div>
+      <a class="next-lesson" href={`${base}reference/`}><span><small>次に読む</small><strong>Git用語と困ったときのヒント</strong></span><b>→</b></a>
+    </section>
+  </article>
+</KnowledgeLayout>

@@ -1,0 +1,30 @@
+---
+import KnowledgeLayout from '../layouts/KnowledgeLayout.astro';
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+---
+<KnowledgeLayout title="Gitの基本をやさしく解説｜やさしいGit" description="GitとGitHubの違い、変更・記録・共有の流れ、ブランチの考え方を初心者向けに図解します。">
+  <header class="article-hero">
+    <a class="back-home" href={base}>← ガイドのトップ</a><p class="eyebrow">GIT BASICS · はじめの一歩</p>
+    <h1>Gitは「時間を戻せるノート」。<br /><em>まずは全体像を知ろう。</em></h1>
+    <p>ファイルを編集したあと、どこが変わったかを記録し、必要なときに前の状態を振り返る。Gitは、そんな開発の記録帳です。</p>
+    <div class="reading-meta"><span>📖 約5分</span><span>🌱 初心者向け</span><span>図でわかる</span></div>
+  </header>
+  <article class="article-body">
+    <section class="lesson-block"><p class="eyebrow">01 · まず違いを知ろう</p><h2>GitとGitHubは、何が違うの？</h2>
+      <div class="compare-cards"><div><span class="compare-icon">📔</span><h3>Git</h3><p>自分のパソコンで変更を記録する仕組み。いつ、何を変えたかをたどれます。</p><small>あなたのPCの中</small></div><div class="compare-arrow">＋</div><div><span class="compare-icon">☁️</span><h3>GitHub</h3><p>Gitの記録をインターネット上で共有する場所。仲間と相談しながら開発できます。</p><small>インターネット上</small></div></div>
+      <p class="soft-callout">Gitだけでも記録はできます。GitHubへ送ると、バックアップやチームでの共同作業がしやすくなります。</p>
+    </section>
+    <section class="lesson-block" id="basic-flow"><p class="eyebrow">02 · いちばん大切な流れ</p><h2>変更して、記録して、共有する</h2><p>「記録」と「共有」は別の操作です。まず自分のPCに記録し、その記録をあとからGitHubへ送ります。</p>
+      <div class="step-flow"><article><b>1</b><span>✏️</span><h3>変更</h3><p>ファイルを編集する</p></article><i>→</i><article><b>2</b><span>📸</span><h3>記録（commit）</h3><p>変更をまとめて保存する</p></article><i>→</i><article><b>3</b><span>☁️</span><h3>共有（push）</h3><p>GitHubへ記録を送る</p></article></div>
+      <div class="two-column-explain"><div><h3>取り込み（pull）</h3><p>GitHubにある新しい記録を、自分のPCに持ってくる操作です。作業を始める前に更新を取り込むと、仲間の変更を反映できます。</p></div><div><h3>変更の提案（Pull Request）</h3><p>自分の変更を確認してもらい、本流へ取り込む相談をするものです。いきなり本流に混ぜず、レビューの時間を作れます。</p></div></div>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">03 · こわくない仕組み</p><h2>ブランチは「別の作業机」</h2><p>本流（main）をそのままにして、別の作業机で新機能や修正を進められます。うまくいかなければ本流に取り込まずに済みます。</p>
+      <div class="branch-diagram"><div class="branch-main"><span>main</span><i></i><i></i><i></i><strong>いつもの記録</strong></div><div class="branch-feature"><span>feature</span><i></i><i></i><b>新しい機能の作業</b><em>完了したら合流</em></div></div>
+      <p>作業が終わったら、変更を確認して本流へ取り込みます。チームでは、変更の提案を作ってレビューしてから取り込むのが一般的です。</p>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">04 · 小さく始めよう</p><h2>最初のプロジェクトでやること</h2>
+      <ol class="learning-list"><li><b>1</b><div><strong>プロジェクトフォルダを用意</strong><p>新しく作るか、手元にあるフォルダを開きます。</p></div></li><li><b>2</b><div><strong>ファイルを少し編集</strong><p>READMEに一行足すだけでも十分な練習です。</p></div></li><li><b>3</b><div><strong>差分を見て記録</strong><p>どのファイルが変わったかを確認し、短いメモを付けて記録します。</p></div></li><li><b>4</b><div><strong>GitHubに共有</strong><p>最初の共有先を作り、記録をアップロードします。</p></div></li></ol>
+      <a class="next-lesson" href={`${base}app-guide/`}><span><small>次に読む</small><strong>やさしいGitで操作してみる</strong></span><b>→</b></a>
+    </section>
+  </article>
+</KnowledgeLayout>

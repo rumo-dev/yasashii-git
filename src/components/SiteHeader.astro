@@ -1,8 +1,21 @@
-<header class="topbar">
-  <a class="brand" href="#top" aria-label="やさしいGit チュートリアルの先頭へ">
+---
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const pages = [
+  { href: `${base}git-basics/`, label: 'Git入門' },
+  { href: `${base}teamwork/`, label: 'チーム開発' },
+  { href: `${base}app-guide/`, label: 'アプリの使い方' },
+  { href: `${base}reference/`, label: '用語・困ったとき' },
+];
+const showMenu = Astro.props.showMenu ?? false;
+---
+<header class="topbar site-header">
+  <a class="brand" href={base} aria-label="やさしいGit ガイドのホームへ">
     <span class="brand-mark" aria-hidden="true">🌱</span>
-    <span>やさしいGit <small>はじめてガイド</small></span>
+    <span>やさしいGit <small>Gitを、やさしい日本語で。</small></span>
   </a>
-  <button class="menu-toggle" aria-expanded="false" aria-controls="sidebar">目次</button>
+  <nav class="global-nav" aria-label="メインメニュー">
+    {pages.map((page) => <a href={page.href} aria-current={Astro.url.pathname === new URL(page.href, Astro.url).pathname ? 'page' : undefined}>{page.label}</a>)}
+  </nav>
+  {showMenu && <button class="menu-toggle" aria-expanded="false" aria-controls="sidebar">目次</button>}
   <a class="github-link" href="https://github.com/rumo-dev/yasashii-git">GitHubを見る ↗</a>
 </header>

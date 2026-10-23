@@ -1,7 +1,7 @@
 ---
 import '../styles/site.css';
-const title = 'やさしいGit チュートリアル';
-const description = 'やさしいGitの使い方、GitHubでのチーム開発、開発者向けの手順を初心者向けに解説します。';
+const title = Astro.props.title ?? 'やさしいGit｜Git・GitHub はじめてガイド';
+const description = Astro.props.description ?? 'GitとGitHubの基礎からチーム開発、やさしいGitの使い方まで初心者向けに解説します。';
 ---
 <!doctype html>
 <html lang="ja">

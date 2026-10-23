@@ -1,0 +1,29 @@
+---
+import '../styles/site.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+const title = Astro.props.title ?? 'やさしいGit｜Git・GitHub はじめてガイド';
+const description = Astro.props.description ?? 'GitとGitHubの基礎からチーム開発、やさしいGitの使い方まで初心者向けに解説します。';
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#f7f8f3" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <title>{title}</title>
+    <link rel="icon" href={`${import.meta.env.BASE_URL}favicon.svg`} type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  </head>
+  <body class="knowledge-page">
+    <a class="skip-link" href="#page-content">本文へ移動</a>
+    <SiteHeader />
+    <main id="page-content" class="knowledge-main"><slot /></main>
+    <SiteFooter />
+  </body>
+</html>
