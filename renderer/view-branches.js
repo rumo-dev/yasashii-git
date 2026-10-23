@@ -246,5 +246,36 @@ Views.branches = (() => {
     if (r !== undefined) { toast('アップロードしました'); await refreshAll(); }
   }
 
-  return { render, onStatus };
+  /** 左のブランチ一覧を右クリックしたときの操作メニュー */
+  async function openSideMenu(e, branch, remote = false) {
+    e.preventDefault(); e.stopPropagation();
+    try {
+      const [branchesNow, flow] = await Promise.all([G('branches'), G('gitFlowConfig')]);
+      data = branchesNow; flowConfig = flow;
+    } catch (err) { await showError(err); return; }
+    if (remote) {
+      const remoteName = branch.name.split('/')[0];
+      const shortName = branch.name.slice(remoteName.length + 1);
+      const haveLocal = data.local.some((b) => b.name === shortName);
+      contextMenu(e, [
+        haveLocal ? { label: '✓ 手元にもあります', disabled: true } : { label: '⬇ 手元に持ってきて切り替え', onclick: () => checkoutRemote(branch.name) },
+        'sep',
+        { label: '今の分岐に合流', onclick: () => mergeInto(branch.name) },
+        'sep',
+        { label: '🗑 サーバーから削除', danger: true, onclick: () => delRemote(remoteName, shortName) },
+      ]);
+      return;
+    }
+    const flowType = flowKind(flowConfig, branch.name);
+    const items = [];
+    if (!branch.current) items.push({ label: '切り替え', onclick: () => switchTo(branch.name) });
+    if (!branch.current) items.push({ label: '今の分岐に合流', onclick: () => mergeInto(branch.name) });
+    items.push('sep', { label: '名前変更', onclick: () => rename(branch.name) });
+    if (flowType) items.push({ label: 'GitFlowを完了', onclick: () => finishGitFlow(branch.name) });
+    if (branch.current && branch.upstream) items.push({ label: jp('force'), danger: true, onclick: forcePush });
+    if (!branch.current) items.push('sep', { label: '🗑 削除', danger: true, onclick: () => del(branch.name) });
+    contextMenu(e, items);
+  }
+
+  return { render, onStatus, openSideMenu };
 })();
