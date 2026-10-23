@@ -53,6 +53,9 @@ const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL :
     function updateAssets() {
       const release = releases.find(item => item.tag_name === versionSelect.value);
       const choices = release ? choicesFor(osSelect.value, release) : [];
+      if (osSelect.value === 'windows') {
+        choices.sort((a, b) => Number(b.label.startsWith('セットアップ版')) - Number(a.label.startsWith('セットアップ版')));
+      }
       formatSelect.replaceChildren();
       choices.forEach(({ asset, label }) => {
         const option = document.createElement('option');
