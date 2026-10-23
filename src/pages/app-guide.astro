@@ -1,18 +1,18 @@
 ---
-import SiteLayout from '../layouts/SiteLayout.astro';
-import SiteHeader from '../components/SiteHeader.astro';
-import GuideSidebar from '../components/GuideSidebar.astro';
-import SiteFooter from '../components/SiteFooter.astro';
+import KnowledgeLayout from '../layouts/KnowledgeLayout.astro';
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 ---
 
-<SiteLayout title="やさしいGitの使い方｜アプリガイド" description="プロジェクトの作成、記録、共有、ブランチ、タスク、GitHub Actionsなど、やさしいGitの操作を順番に学べます。">
-<SiteHeader showMenu={true} />
-<div class="layout">
-<GuideSidebar />
-<main id="top" tabindex="-1">
-<section class="hero"><div class="hero-copy"><p class="eyebrow">はじめての Git と GitHub</p><h1>作ったものを、<br><em>安心して育てよう。</em></h1><p class="hero-lead">「やさしいGit」の使い方から、仲間と一緒に開発する流れまで。初めての人向けに順番に説明します。</p><div class="hero-actions"><a class="button primary" href="#start">準備をはじめる ↓</a><a class="button secondary" href="https://github.com/rumo-dev/yasashii-git/releases/latest">アプリをダウンロード ↗</a></div><p class="hero-meta">Windows・macOS・Linux 対応</p></div><div class="hero-art" aria-hidden="true"><div class="sun"></div><div class="plant"><i></i><i></i><b></b></div><div class="soil"></div><div class="art-card"><span>今日の記録</span><strong>小さな一歩を保存しました</strong><small>✓ GitHubに共有できます</small></div><span class="sparkle s1">✦</span><span class="sparkle s2">✳</span></div></section>
-<div class="content">
+<KnowledgeLayout title="やさしいGitの使い方｜アプリガイド" description="プロジェクトの作成、記録、共有、ブランチ、タスク、GitHub Actionsなど、やさしいGitの操作を順番に学べます。">
+<header class="article-hero app-guide-hero">
+  <a class="back-home" href={base}>← ガイドのトップ</a><p class="eyebrow">APP GUIDE · アプリを使ってみよう</p>
+  <h1>やさしいGitで、<br /><em>開発の流れを体験しよう。</em></h1>
+  <p>インストールから日々の記録、チーム開発、便利な機能まで。画面の操作に沿って順番に学べます。</p>
+  <div class="reading-meta"><span>📖 約12分</span><span>🌱 初心者向け</span><span>操作ガイド</span></div>
+</header>
+<article class="article-body app-guide-body" id="top">
 <section class="intro-card"><div class="intro-icon">🧭</div><div><h2>このページで学べること</h2><p>パソコンにアプリを入れるところから、変更を記録してGitHubに共有するところまでを一通り体験できます。後半では、チーム開発やアプリ自体の開発方法も紹介します。</p></div></section>
+<div class="app-guide-tools"><label class="nav-label" for="guide-search">このガイドを検索</label><div class="guide-search"><input id="guide-search" type="search" placeholder="例：ブランチ、タスク" autocomplete="off" aria-label="アプリガイドを検索" /><span id="search-status" aria-live="polite"></span></div><nav class="app-guide-toc" aria-label="このページの目次"><a class="nav-link" href="#start">準備</a><a class="nav-link" href="#first-project">プロジェクト</a><a class="nav-link" href="#daily">基本操作</a><a class="nav-link" href="#team">チーム開発</a><a class="nav-link" href="#branch">分岐と提案</a><a class="nav-link" href="#gitflow">GitFlow</a><a class="nav-link" href="#tasks">タスク</a><a class="nav-link" href="#safety">安全に使う</a><a class="nav-link" href="#developer">開発者向け</a><a class="nav-link" href="#features">便利な機能</a><a class="nav-link" href="#terms">用語集</a><a class="nav-link" href="#help">困ったとき</a></nav></div>
 <section class="chapter" id="start"><div class="chapter-heading"><span class="chapter-num">01</span><div><p class="eyebrow">まずは準備</p><h2>インストールと準備</h2></div></div><p>「やさしいGit」は、GitHubとつながるデスクトップアプリです。最初にアプリとGitHubアカウントを準備しましょう。</p><ol class="steps">
 <li><span class="step-dot">1</span><div><h3>アプリをダウンロード</h3><p><a href="https://github.com/rumo-dev/yasashii-git/releases/latest">最新リリース</a>を開き、お使いのOSに合ったファイルを選びます。Windowsはセットアップ版またはポータブル版、macOSはIntel / Apple Silicon用のDMG、LinuxはAppImage / debです。</p></div></li>
 <li><span class="step-dot">2</span><div><h3>GitHubアカウントを用意</h3><p>アカウントがない場合は、<a href="https://github.com/signup">GitHubでアカウントを作成</a>します。アプリでログインすると、プロジェクトの共有やチーム招待を使えます。</p></div></li>
@@ -30,9 +30,8 @@ npm install
 npm start</code></pre><h3>開発の基本サイクル</h3><ol class="number-list"><li>GitHubの課題やチームの相談から、作業内容を決めます。</li><li>最新の変更を取り込み、作業用の分岐を作ります。</li><li>小さな単位で実装し、動作を確認します。既存のテストは<code>npm test</code>で実行できます。</li><li>変更を記録してGitHubにアップロードし、変更の提案を作ります。</li><li>レビューで指摘を確認して修正し、合意できたら本流へ取り込みます。</li></ol><div class="callout"><strong>配布版を作るとき</strong><p>リリース時は<code>package.json</code>のバージョンに合わせた<code>v</code>付きタグをGitHubへ送ります。GitHub ActionsがWindows・macOS・Linux向けの配布ファイルを作ります。詳しい手順は<a href="https://github.com/rumo-dev/yasashii-git/blob/main/README.md">README</a>を確認してください。</p></div></section>
 <section class="chapter" id="features"><div class="chapter-heading"><span class="chapter-num">10</span><div><p class="eyebrow">知っておくと便利</p><h2>作業を助ける便利な機能</h2></div></div><p>基本の記録・共有に慣れたら、履歴の見直しや自動化など、アプリの機能を少しずつ使ってみましょう。</p><div class="feature-grid"><article><span>🧑‍🎨</span><h3>履歴で変更した人を確認</h3><p>記録ごとに作成者のアイコンと名前を確認できます。GitHubのアイコンがない場合は頭文字が表示されます。ユーザーごとの色で分岐も見分けられます。</p></article><article><span>🧯</span><h3>見失った記録を探す</h3><p>履歴から見えなくなった記録を「消えた記録を探す」で探し、必要なら新しい分岐として復元できます。復元前に記録の内容と日時を確認しましょう。</p></article><article><span>🧩</span><h3>エディターやターミナルを開く</h3><p>設定したエディターでプロジェクトやファイルを開いたり、プロジェクトの場所からターミナルを起動したりできます。使うアプリは設定から選べます。</p></article><article><span>⚙️</span><h3>GitHub Actionsを管理</h3><p>GitHub画面ではワークフローの作成・確認に加え、実行、再実行、キャンセル、ログの確認ができます。作成したワークフローは変更として記録し、GitHubへ共有してから利用します。</p></article><article><span>🔎</span><h3>取り込み前に差分を確認</h3><p>分岐を取り込む前に変更内容を見比べられます。競合が起きた場合は、双方の変更と結果を確認し、残す内容を決めて解決してください。</p></article><article><span>⌨️</span><h3>コマンドパレットを使う</h3><p><kbd>Ctrl</kbd> + <kbd>K</kbd> からコマンドパレットを開き、画面や操作を検索できます。マウスでメニューを探すのが大変なときに便利です。</p></article></div><div class="tip"><span>💡</span><p>最初から全部を覚える必要はありません。困った場面に出会ったとき、このページ内検索で機能名や操作を探してみてください。</p></div></section><section class="chapter" id="terms"><div class="chapter-heading"><span class="chapter-num">11</span><div><p class="eyebrow">言葉を整理</p><h2>よく出てくる言葉</h2></div></div><dl class="glossary"><div><dt>Git</dt><dd>ファイルの変更を記録し、過去の状態をたどれる仕組み。</dd></div><div><dt>GitHub</dt><dd>Gitのプロジェクトをインターネット上に置き、共有するサービス。</dd></div><div><dt>記録 / commit</dt><dd>変更をひとまとまりとして保存すること。</dd></div><div><dt>アップロード / push</dt><dd>手元の記録をGitHubへ送ること。</dd></div><div><dt>取り込み / pull</dt><dd>GitHubにある新しい変更を手元へ持ってくること。</dd></div><div><dt>作業の分岐 / branch</dt><dd>本流に影響を与えず、別の作業を進める場所。</dd></div><div><dt>変更の提案 / Pull Request</dt><dd>変更を確認してもらい、本流へ取り込む相談をすること。</dd></div><div><dt>競合 / conflict</dt><dd>同じ場所に異なる変更があり、自分たちで整理する必要がある状態。</dd></div></dl></section>
 <section class="help-card" id="help"><div class="help-icon">🌼</div><div><p class="eyebrow">ひとりで悩まなくて大丈夫</p><h2>困ったときは</h2><p>エラーの詳しい内容を確認し、画面に表示された案内に沿ってください。不具合や改善案はアプリ内の「バグ報告・要望」から送れます。投稿はGitHub上で公開されるため、個人情報や秘密情報は書かないでください。</p><a class="button secondary" href="https://github.com/rumo-dev/yasashii-git/issues">質問・要望を見る ↗</a></div></section>
-<SiteFooter />
-</div></main></div>
-</SiteLayout>
+</article>
+</KnowledgeLayout>
 
 
 

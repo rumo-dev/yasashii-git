@@ -14,6 +14,18 @@
 .site-header .menu-toggle{flex:none}
 .knowledge-page{background:#f7f8f3}
 .knowledge-main{width:min(1080px,calc(100% - 48px));margin:0 auto;min-height:calc(100vh - 150px)}
+.app-guide-hero{background:#f4eadb}
+.app-guide-hero h1 em{color:#ad6844}
+.app-guide-body{max-width:920px;padding-top:25px}
+.app-guide-body .intro-card{margin-bottom:28px}
+.app-guide-tools{margin:0 0 32px;padding:17px 18px 14px;border:1px solid #e7e9df;border-radius:12px;background:#f8f9f5}
+.app-guide-tools .nav-label{display:block;margin:0 0 5px;color:#647166;font-size:11px;font-weight:700}
+.app-guide-tools .guide-search{margin:0 0 8px;padding:0}
+.app-guide-toc{display:flex;flex-wrap:wrap;gap:7px}
+.app-guide-toc .nav-link{display:inline-flex;align-items:center;padding:6px 10px;border:1px solid #e0e6dc;border-radius:999px;background:#fff;color:#59675d;font-size:11px;text-decoration:none;transition:background .15s,border-color .15s,color .15s}
+.app-guide-toc .nav-link:hover,.app-guide-toc .nav-link.active{border-color:#a9bea7;background:#eaf1e6;color:#3c6647}
+.app-guide-body .chapter{scroll-margin-top:24px}
+.app-guide-body .help-card{scroll-margin-top:24px}
 .knowledge-page>footer{width:min(1080px,calc(100% - 48px));margin:0 auto;padding:25px 0 34px;gap:18px}
 .home-hero{min-height:480px;position:relative;isolation:isolate;display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:36px;padding:56px clamp(30px,6vw,78px);margin:26px 0 22px;overflow:hidden;border-radius:28px;background:linear-gradient(122deg,#203c32 0%,#315b48 62%,#587a5c 100%);color:#fff}
 .home-hero:before,.home-hero:after{content:"";position:absolute;z-index:-1;border:1px solid #ffffff17;border-radius:50%;pointer-events:none}
