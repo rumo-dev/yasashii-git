@@ -621,10 +621,44 @@ async function initializeGitFlow(repo, { productionBranch, developmentBranch = '
     ['gitflow.prefix.versiontag', 'v'],
   ];
   for (const [key, value] of config) await run(['config', '--local', key, value], { cwd: repo });
+  await run(['config', '--local', 'yasashiigit.workflow', 'gitflow'], { cwd: repo });
   return { productionBranch, developmentBranch, created: !exists && !remoteMatches.length, trackedRemote: !exists && remoteMatches.length > 0 };
 }
 
+async function initializeGitHubFlow(repo, { baseBranch, prefix = 'feature/' } = {}) {
+  const st = await status(repo);
+  if (!st.hasCommits) throw new GitError('GitHub Flowを始めるには、まず最初の変更を記録してください。', 'no commits');
+  if (st.detached || st.operation) throw new GitError('分岐の切り替え中や合流中は初期化できません。完了してからもう一度お試しください。', st.operation || 'detached HEAD');
+  if (st.files.length) throw new GitError('作業中の変更があります。先に「一時退避」へ保存してから初期化してください。', 'working tree is not clean');
+  baseBranch = String(baseBranch || '').trim();
+  prefix = String(prefix || '').trim();
+  if (!baseBranch) throw new GitError('取り込み先の分岐を選んでください。', 'missing base branch');
+  await validateBranchName(repo, baseBranch);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*\/$/.test(prefix) || prefix.includes('..') || prefix.includes('//')) throw new GitError('作業分岐の接頭辞を確認してください。（例：feature/）', prefix);
+  if (!(await remotes(repo)).length) throw new GitError('先に「アップロード」でGitHubへ接続してください。GitHub Flowにはプルリクエストを作る接続先が必要です。', 'no remote');
+  const current = await branches(repo);
+  if (!current.local.some((b) => b.name === baseBranch)) throw new GitError(`取り込み先の分岐「${baseBranch}」が手元にありません。先に「更新を確認」して分岐を取得してください。`, baseBranch);
+  await run(['config', '--local', 'yasashiigit.githubflow.base', baseBranch], { cwd: repo });
+  await run(['config', '--local', 'yasashiigit.githubflow.prefix', prefix], { cwd: repo });
+  await run(['config', '--local', 'yasashiigit.workflow', 'githubflow'], { cwd: repo });
+  return { baseBranch, prefix };
+}
+
+async function githubFlowConfig(repo) {
+  const mode = await run(['config', '--local', '--get', 'yasashiigit.workflow'], { cwd: repo, okCodes: [0, 1] });
+  if (mode.code !== 0 || mode.stdout.trim() !== 'githubflow') return null;
+  const read = async (key) => {
+    const r = await run(['config', '--local', '--get', key], { cwd: repo, okCodes: [0, 1] });
+    return r.code === 0 ? r.stdout.trim() : '';
+  };
+  const baseBranch = await read('yasashiigit.githubflow.base');
+  if (!baseBranch) return null;
+  return { baseBranch, prefix: await read('yasashiigit.githubflow.prefix') || 'feature/' };
+}
+
 async function gitFlowConfig(repo) {
+  const mode = await run(['config', '--local', '--get', 'yasashiigit.workflow'], { cwd: repo, okCodes: [0, 1] });
+  if (mode.code === 0 && mode.stdout.trim() === 'githubflow') return null;
   const read = async (key) => {
     const r = await run(['config', '--local', '--get', key], { cwd: repo, okCodes: [0, 1] });
     return r.code === 0 ? r.stdout.trim() : '';
@@ -668,6 +702,31 @@ async function beginGitFlowBranch(repo, { type, name, issueNumber } = {}) {
   return { branch, base, type };
 }
 
+async function beginGitHubFlowBranch(repo, { name, issueNumber } = {}) {
+  const config = await githubFlowConfig(repo);
+  if (!config) throw new GitError('先にGitHub Flowを初期化してください。', 'GitHub Flow is not initialized');
+  const st = await status(repo);
+  if (!st.hasCommits) throw new GitError('最初の変更を記録してから作業分岐を作ってください。', 'no commits');
+  if (st.detached || st.operation) throw new GitError('過去の記録を見ている状態や、合流中には作業分岐を作れません。', st.operation || 'detached HEAD');
+  if (st.files.length) throw new GitError('作業中の変更があります。先に「一時退避」へ保存してください。', 'working tree is not clean');
+  const rawName = String(name || '').trim();
+  if (!rawName) throw new GitError('作業分岐の名前を入力してください。', 'missing branch name');
+  const branch = rawName.startsWith(config.prefix) ? rawName : config.prefix + rawName;
+  await validateBranchName(repo, branch);
+  const current = await branches(repo);
+  if (current.local.some((b) => b.name === branch) || current.remote.some((b) => b.name.slice(b.name.indexOf('/') + 1) === branch)) throw new GitError(`分岐「${branch}」はすでにあります。別の名前を使ってください。`, branch);
+  if ((await remotes(repo)).length) {
+    await fetch(repo);
+    const refreshed = await branches(repo);
+    if (refreshed.local.some((b) => b.name === branch) || refreshed.remote.some((b) => b.name.slice(b.name.indexOf('/') + 1) === branch)) throw new GitError(`分岐「${branch}」はサーバー上にすでにあります。別の名前を使ってください。`, branch);
+  }
+  await switchBranch(repo, config.baseBranch);
+  if ((await remotes(repo)).length) await pull(repo);
+  await createBranch(repo, branch, { from: config.baseBranch, switchTo: true });
+  if (issueNumber != null) await bindTaskBranch(repo, issueNumber, branch);
+  return { branch, base: config.baseBranch };
+}
+
 async function readTaskBranchMap(repo) {
   const r = await run(['config', '--local', '--get', 'yasashiigit.task-branches'], { cwd: repo, okCodes: [0, 1] });
   if (r.code !== 0 || !r.stdout.trim()) return {};
@@ -694,6 +753,10 @@ async function getTaskBranch(repo, issueNumber) {
   if (!branch) return null;
   const current = await branches(repo);
   return current.local.some((b) => b.name === branch) ? branch : null;
+}
+
+async function getBoundTaskBranch(repo, issueNumber) {
+  return (await readTaskBranchMap(repo))[String(issueNumber)] || null;
 }
 
 async function removeTaskBranchBinding(repo, branch) {
@@ -1188,7 +1251,7 @@ module.exports = {
   stage, stageAll, unstage, unstageAll, discard,
   commit, undoLastCommit, lastCommitMessage,
   log, commitFiles, commitDiff, reflog, recoverFromReflog, revertCommit, cherryPick, resetTo,
-  branches, createBranch, initializeGitFlow, gitFlowConfig, beginGitFlowBranch, finishGitFlowBranch, createTaskBranch, getTaskBranch, bindTaskBranch, removeTaskBranchBinding, switchBranch, switchToCommit, deleteBranch, deleteRemoteBranch, renameBranch,
+  branches, createBranch, initializeGitFlow, gitFlowConfig, beginGitFlowBranch, finishGitFlowBranch, initializeGitHubFlow, githubFlowConfig, beginGitHubFlowBranch, createTaskBranch, getTaskBranch, getBoundTaskBranch, bindTaskBranch, removeTaskBranchBinding, switchBranch, switchToCommit, deleteBranch, deleteRemoteBranch, renameBranch,
   merge, compareBranches, abortOperation, continueOperation, resolveConflict, conflictStages, writeResolvedConflict, markResolved,
   remotes, addRemote, removeRemote, setRemoteUrl, fetch, linkUpstream, prepareSync, pull, push,
   stashList, stashSave, stashApply, stashPop, stashDrop, stashDiff,

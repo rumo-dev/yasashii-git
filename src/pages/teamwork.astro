@@ -10,14 +10,19 @@ const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL :
     <div class="reading-meta"><span>📖 約7分</span><span>🤝 チーム開発</span><span>実践ガイド</span></div>
   </header>
   <article class="article-body">
-    <section class="lesson-block"><p class="eyebrow">THE TEAM LOOP</p><h2>チーム開発の基本ループ</h2><p>「誰が何を作っているか」を共有し、変更を本流に入れる前に確認するのがポイントです。</p>
-      <div class="team-loop"><article><span>🗒️</span><b>タスクを決める</b><small>何を作るかを共有</small></article><i>→</i><article><span>🌿</span><b>作業を分ける</b><small>専用ブランチで開発</small></article><i>→</i><article><span>📤</span><b>変更を提案</b><small>Pull Requestを作成</small></article><i>→</i><article><span>👀</span><b>レビュー</b><small>仲間と確認・相談</small></article><i>→</i><article><span>🌳</span><b>取り込む</b><small>本流へ合流</small></article></div>
+    <section class="lesson-block"><p class="eyebrow">CHOOSE A WORKFLOW</p><h2>チームの進め方を選ぶ</h2><p>「作業の分岐」画面でGitHub FlowかGitFlowを初期化できます。どちらを使うか、チームで先に決めてください。</p>
+      <div class="flow-cards"><article><b>GitHub Flow</b><p>基準ブランチ（通常は<code>main</code>）を一つ決めます。作業ごとの分岐からプルリクエストを作り、レビュー後に同じ基準ブランチへ取り込みます。</p></article><article><b>GitFlow</b><p><code>develop</code>に機能を集め、リリース準備や緊急修正の分岐も使います。リリース手順を分けたいチーム向けです。</p></article></div>
+      <p>GitHub Flowの初期化では基準ブランチと作業ブランチの接頭辞（標準は<code>feature/</code>）を指定します。既存の分岐は変更・削除されません。</p>
+    </section>
+    <section class="lesson-block"><p class="eyebrow">THE TEAM LOOP</p><h2>GitHub Flowの基本ループ</h2><p>「誰が何を作っているか」を共有し、プルリクエストで確認してから本流に取り込みます。</p>
+      <div class="team-loop"><article><span>🗒️</span><b>タスクを決める</b><small>何を作るかを共有</small></article><i>→</i><article><span>🌿</span><b>作業を分ける</b><small>基準ブランチから作成</small></article><i>→</i><article><span>📤</span><b>変更を提案</b><small>Pull Requestを作成</small></article><i>→</i><article><span>👀</span><b>レビュー</b><small>確認・修正を繰り返す</small></article><i>→</i><article><span>🌳</span><b>取り込む</b><small>確認後に本流へ合流</small></article></div>
     </section>
     <section class="lesson-block"><p class="eyebrow">A PRACTICAL EXAMPLE</p><h2>「プロフィール画面を追加する」場合</h2>
-      <ol class="learning-list"><li><b>1</b><div><strong>タスクにゴールを書く</strong><p>例：「名前と自己紹介を表示する。スマートフォンでも読めること」</p></div></li><li><b>2</b><div><strong>最新の本流からブランチを作る</strong><p><code>feature/profile-page</code> のように、目的が伝わる名前を付けます。</p></div></li><li><b>3</b><div><strong>小さく記録してアップロード</strong><p>「プロフィール画面の枠を追加」「表示内容を整える」のように、後から読んでわかる記録を残します。</p></div></li><li><b>4</b><div><strong>変更の提案を作成</strong><p>何を変えたか、どう確認したかを書き、関連するタスクがあればリンクします。</p></div></li><li><b>5</b><div><strong>レビューを反映して取り込む</strong><p>質問や提案を話し合い、修正を追加してから本流に取り込みます。</p></div></li></ol>
+      <ol class="learning-list"><li><b>1</b><div><strong>タスクにゴールを書く</strong><p>例：「名前と自己紹介を表示する。スマートフォンでも読めること」</p></div></li><li><b>2</b><div><strong>タスクを進行中にする</strong><p>アプリがIssue番号付きの作業ブランチを、初期化した基準ブランチから作ります。</p></div></li><li><b>3</b><div><strong>小さく記録してアップロード</strong><p>「プロフィール画面の枠を追加」「表示内容を整える」のように、後から読んでわかる記録を残します。</p></div></li><li><b>4</b><div><strong>タスクを完了にして提案を作る</strong><p>アプリがタスクに紐づくプルリクエストを作ります。タスクはレビュー中のままです。</p></div></li><li><b>5</b><div><strong>レビューして取り込む</strong><p>差分を確認し、必要なら修正を依頼します。修正は同じブランチへ追加するので、同じ提案に反映されます。取り込み後はGitHubがタスクを完了にします。</p></div></li></ol>
     </section>
     <section class="lesson-block"><p class="eyebrow">WHEN CHANGES COLLIDE</p><h2>変更が競合したら</h2><p>同じファイルの同じ場所を別々に編集すると、Gitがどちらを採用するか決められず「競合」になります。壊れたわけではありません。人が内容を確認すれば解決できます。</p>
-      <div class="conflict-steps"><div><b>01</b><strong>あわてず内容を確認</strong><p>競合したファイルと、それぞれの変更を読みます。</p></div><div><b>02</b><strong>残す内容を相談</strong><p>自分の変更、相手の変更、両方を組み合わせる案を比べます。</p></div><div><b>03</b><strong>解決して記録</strong><p>正しい内容を保存し、競合解決を完了して記録します。</p></div></div>
+      <div class="conflict-steps"><div><b>01</b><strong>あわてず内容を確認</strong><p>競合したファイルと、それぞれの変更を読みます。</p></div><div><b>02</b><strong>残す内容を相談</strong><p>自分の変更、相手の変更、両方を組み合わせる案を比べます。</p></div><div><b>03</b><strong>同じ提案を更新</strong><p>作業者が提案のブランチに切り替え、基準ブランチを合流します。競合を解消して記録・アップロードすると、元の提案に修正が反映されます。</p></div></div>
+      <p>アプリの「変更の提案」一覧では競合とレビュー状況を確認できます。レビュー担当を依頼するとGitHubから通知が届き、アプリの「受信箱」でも確認できます。競合がなくなったら、リーダーが差分・レビュー・自動チェックを確認して取り込みます。取り込み画面では作業ブランチの削除が初期状態で選ばれています。レビュー承認やチェックを必須にする場合は、GitHubのブランチ保護ルールも設定してください。</p>
       <p class="warning-callout">内容がわからない場合は、強制アップロードで上書きせず、作業した人に相談してください。</p>
     </section>
     <section class="lesson-block"><p class="eyebrow">TEAM HABITS</p><h2>気持ちよく進める小さな習慣</h2><div class="habit-grid"><div><span>🧩</span><strong>小さく分ける</strong><p>一つの提案に変更を詰め込みすぎない。</p></div><div><span>📝</span><strong>背景も書く</strong><p>何を変えたかだけでなく、理由も共有。</p></div><div><span>💬</span><strong>早めに相談</strong><p>迷っている段階で声をかける。</p></div><div><span>🌼</span><strong>人に向けて話す</strong><p>コードを見て、相手を責めずに相談。</p></div></div>

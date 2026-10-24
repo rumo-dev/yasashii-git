@@ -159,7 +159,8 @@ Views.github = (() => {
     clear(listEl).appendChild(h('div', { class: 'list' }, list.length ? list.map((p) => h('div', { class: 'row' },
       h('span', {}, p.state === 'MERGED' ? '🟣' : p.state === 'CLOSED' ? '🔴' : '🟢'),
       h('div', { class: 'grow' }, h('div', { class: 'title' }, h('b', {}, `#${p.number} ${p.title}`), p.isDraft ? h('span', { class: 'pill yellow', style: { marginLeft: '6px' } }, '下書き') : null),
-        h('div', { class: 'muted', style: { fontSize: '12px' } }, `${p.headRefName} → ${p.baseRefName}　👤 ${p.author ? p.author.login : ''}　${relTime(p.createdAt)}`)),
+      h('div', { class: 'muted', style: { fontSize: '12px' } }, `${p.headRefName} → ${p.baseRefName}　👤 ${p.author ? p.author.login : ''}　${relTime(p.createdAt)}`),
+        p.state === 'OPEN' ? h('div', { class: 'btn-row', style: { marginTop: '5px' } }, prStatus(p), h('button', { class: 'btn small', onclick: () => inspectPR(p) }, '確認・レビュー')) : null),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn small', onclick: () => APP('openExternal', p.url) }, 'ブラウザで開く'),
         p.state === 'OPEN' ? [h('button', { class: 'btn small', onclick: () => checkoutPR(p) }, '手元に持ってくる'),
@@ -183,13 +184,51 @@ Views.github = (() => {
     if (res) { toast('変更の提案を作りました 🎉'); if (res.url) APP('openExternal', res.url).catch(() => {}); draw(); }
   }
   async function mergePR(p) {
-    const r = await formDialog({ title: `#${p.number} を取り込みますか？`, okLabel: '取り込む', danger: true, intro: `「${p.title}」を「${p.baseRefName}」に取り込みます。`,
+    let latest; try { latest = await GH('viewPR', S.repo, p.number); } catch (e) { showError(e); return; }
+    if (latest.mergeable === 'CONFLICTING') { toast('競合があります。作業ブランチを更新して解消してから取り込んでください。', 'error'); return; }
+    if (latest.mergeable === 'UNKNOWN') { toast('GitHubが競合状況を確認中です。少し待ってから再確認してください。', 'error'); return; }
+    if (latest.reviewDecision === 'CHANGES_REQUESTED') { toast('修正依頼が残っています。内容を確認して同じ提案を更新してください。', 'error'); return; }
+    const r = await formDialog({ title: `#${p.number} を取り込みますか？`, okLabel: '取り込む', danger: true, intro: `「${p.title}」を「${p.baseRefName}」に取り込みます。${latest.reviewDecision === 'REVIEW_REQUIRED' ? '\nレビュー承認がまだ確認できません。保護ルールがある場合、GitHubが取り込みを拒否します。' : ''}`,
       fields: [
         { key: 'method', label: '取り込み方', type: 'select', value: 'merge', options: [{ value: 'merge', label: 'そのまま合流する（おすすめ）' }, { value: 'squash', label: '1つの記録にまとめて合流する' }, { value: 'rebase', label: '履歴を一直線につなげて合流する' }] },
-        { key: 'del', label: '取り込んだあと、元の分岐を削除する', type: 'checkbox', value: false }] });
+        { key: 'del', label: '取り込んだあと、元の分岐を削除する', type: 'checkbox', value: true }] });
     if (!r) return;
     const ok = await withBusy('取り込み中…', () => GH('mergePR', S.repo, p.number, r.method, r.del));
     if (ok) { toast('取り込みました ✓'); draw(); }
+  }
+  function prStatus(p) {
+    const merge = { MERGEABLE: ['競合なし', 'green'], CONFLICTING: ['競合あり', 'red'], UNKNOWN: ['競合を確認中', 'yellow'] }[p.mergeable] || ['競合状況不明', ''];
+    const review = { APPROVED: ['承認済み', 'green'], CHANGES_REQUESTED: ['修正依頼あり', 'red'], REVIEW_REQUIRED: ['レビュー待ち', 'yellow'] }[p.reviewDecision];
+    return h('span', { class: `pill ${merge[1]}` }, `${merge[0]}${review ? ` · ${review[0]}` : ''}`);
+  }
+  async function inspectPR(p) {
+    const detail = await withBusy('提案の状態を確認中…', () => GH('viewPR', S.repo, p.number));
+    if (!detail) return;
+    const mergeLabel = { MERGEABLE: '競合は検出されていません', CONFLICTING: '競合があります。作業者が解消して再アップロードしてください', UNKNOWN: 'GitHubが競合を確認中です。少し待って再確認してください' }[detail.mergeable] || '競合状況を取得できません';
+    const reviewLabel = { APPROVED: 'レビュー承認済み', CHANGES_REQUESTED: '修正依頼あり', REVIEW_REQUIRED: 'レビュー承認待ち' }[detail.reviewDecision] || 'レビューは任意、または未設定です';
+    const body = h('div', {}, h('p', {}, mergeLabel), h('p', {}, reviewLabel),
+      h('p', { class: 'muted' }, `変更 ${detail.changedFiles ?? '—'} ファイル　+${detail.additions ?? 0} / -${detail.deletions ?? 0}`),
+      h('p', { class: 'sub' }, '競合がある場合は作業ブランチを更新して修正し、同じ提案へアップロードします。新しい提案を作り直す必要はありません。'));
+    const action = await modal({ title: `#${p.number} ${p.title}`, body, buttons: [
+      { label: 'レビューを依頼', value: 'request' },
+      { label: 'レビュー結果を送る', value: 'review' },
+      { label: '作業ブランチを更新', value: 'update' },
+      { label: '閉じる', value: null },
+    ] });
+    if (action === 'request') {
+      const r = await formDialog({ title: 'レビューを依頼', okLabel: '依頼する', intro: 'GitHubユーザー名を入力します。複数人はカンマで区切れます。', fields: [{ key: 'users', label: 'ユーザー名', required: true, placeholder: '例：tanaka, suzuki' }] });
+      if (r && await withBusy('レビューを依頼中…', () => GH('requestPRReview', S.repo, p.number, r.users))) { toast('レビューを依頼しました'); }
+    } else if (action === 'review') {
+      const r = await formDialog({ title: 'レビュー結果を送る', okLabel: '送信する', intro: '承認・修正依頼はGitHubの権限や保護ルールに従います。', fields: [
+        { key: 'decision', label: '結果', type: 'select', value: 'comment', options: [{ value: 'comment', label: 'コメントのみ' }, { value: 'approve', label: '承認する' }, { value: 'changes', label: '修正を依頼する' }] },
+        { key: 'body', label: 'コメント（省略できます）', type: 'textarea', placeholder: '確認した内容や、直してほしい点' },
+      ] });
+      if (r && await withBusy('レビューを送信中…', () => GH('reviewPR', S.repo, p.number, r.decision, r.body))) { toast('レビューを送りました'); }
+    } else if (action === 'update') {
+      if (detail.mergeable === 'CONFLICTING' && !(await confirmDialog({ title: '作業ブランチを更新しますか？', message: '取り込み先の最新内容を提案のブランチへ取り込みます。競合がある場合は、作業ブランチで解消して再アップロードが必要です。', okLabel: '更新する' }))) return;
+      if (await withBusy('作業ブランチを更新中…', () => GH('updatePRBranch', S.repo, p.number))) toast('作業ブランチを更新しました。状態を再確認してください。');
+    }
+    draw();
   }
   async function closePR(p) {
     if (!(await confirmDialog({ title: `#${p.number} を閉じますか？`, message: '取り込まずに閉じます。あとで開き直すこともできます。', okLabel: '閉じる', danger: true }))) return;

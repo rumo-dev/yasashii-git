@@ -1,7 +1,7 @@
 'use strict';
 /* 「作業の分岐」画面 */
 Views.branches = (() => {
-  let root, data = null, flowConfig = null, token = 0;
+  let root, data = null, flowConfig = null, githubFlowConfig = null, token = 0;
   const open = { local: true, remote: false };   // 折りたたみの状態（手元は開く／サーバーは閉じる）
 
   function render(container) { root = container; draw(true); }
@@ -9,10 +9,10 @@ Views.branches = (() => {
 
   async function draw(showLoading) {
     const my = ++token;
-    let d, flow;
-    try { [d, flow] = await Promise.all([G('branches'), G('gitFlowConfig')]); } catch (e) { if (my === token) { clear(root).appendChild(h('div', { class: 'pad' }, e.message)); } return; }
+    let d, flow, githubFlow;
+    try { [d, flow, githubFlow] = await Promise.all([G('branches'), G('gitFlowConfig'), G('githubFlowConfig')]); } catch (e) { if (my === token) { clear(root).appendChild(h('div', { class: 'pad' }, e.message)); } return; }
     if (my !== token) return;
-    data = d; flowConfig = flow;
+    data = d; flowConfig = flow; githubFlowConfig = githubFlow;
     const st = S.status;
     clear(root);
     root.appendChild(h('div', { class: 'pad' },
@@ -20,14 +20,14 @@ Views.branches = (() => {
         h('div', { style: { flex: 1 } }, h('h2', {}, '🌿 ', termLabel('branch')), h('p', { class: 'sub' }, hint('branch') + ' 新しい機能や修正は、専用の分岐で進めると安心です。')),
         h('button', { class: 'btn primary', onclick: createBranch }, '＋ 新しい作業の分岐を作る')),
       st.detached ? h('div', { class: 'card', style: { background: 'var(--warn-bg)', color: 'var(--warn)' } }, `⚠ いまは${jp('detached')}です。${hint('detached')}`) : null,
-      gitFlowCard(d, st, flow),
+      workflowCard(d, st, flow, githubFlow),
       section('local', '🌿 手元の分岐', d.local.length,
         d.local.length ? d.local.map(localRow) : h('div', { class: 'empty' }, 'まだ分岐がありません。最初の記録を作ると「main」などの分岐ができます。')),
       section('remote', '☁️ サーバー（GitHubなど）上の分岐', d.remote.length,
         d.remote.length ? d.remote.map(remoteRow) : h('div', { class: 'empty' }, 'サーバー上の分岐はありません。「更新を確認」を押すと最新の情報を取得できます。'))));
   }
 
-  function gitFlowCard(d, st, flow) {
+  function workflowCard(d, st, flow, githubFlow) {
     if (flow) {
       const currentKind = flowKind(flow, st.branch);
       const flowRows = d.local.filter((b) => flowKind(flow, b.name));
@@ -38,18 +38,55 @@ Views.branches = (() => {
           h('div', { class: 'btn-row' },
             h('button', { class: 'btn small', onclick: () => beginGitFlow('feature') }, '＋ 機能を作る'),
             h('button', { class: 'btn small', onclick: () => beginGitFlow('release') }, '＋ リリース準備'),
-            h('button', { class: 'btn small', onclick: () => beginGitFlow('hotfix') }, '＋ 緊急修正'))),
+            h('button', { class: 'btn small', onclick: () => beginGitFlow('hotfix') }, '＋ 緊急修正'),
+            h('button', { class: 'btn small', onclick: () => initializeGitHubFlow(d, st) }, 'GitHub Flowに切り替える'))),
         currentKind ? h('p', { class: 'muted', style: { margin: '4px 0 0', fontSize: '12px' } }, `現在「${st.branch}」で作業中です。分岐一覧の「GitFlowを完了」から合流できます。`) : null,
         flowRows.length ? null : h('p', { class: 'muted', style: { margin: '6px 0 0', fontSize: '12px' } }, 'GitFlowの作業用分岐はまだありません。上のボタンから始められます。'));
     }
+    if (githubFlow) return h('div', { class: 'card' },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' } },
+        h('div', { class: 'grow' }, h('b', {}, 'GitHub Flowで作業中'), h('p', { class: 'muted', style: { margin: '5px 0', fontSize: '13px' } }, `基準「${githubFlow.baseBranch}」から「${githubFlow.prefix}名前」の分岐を作り、PRでレビュー・取り込みます。タスクから始めると、この設定が使われます。`)),
+        h('div', { class: 'btn-row' }, h('button', { class: 'btn small primary', onclick: beginGitHubFlow }, '＋ 機能を作る'), h('button', { class: 'btn small', onclick: () => initializeGitFlow(d, st, githubFlow.baseBranch) }, 'GitFlowに切り替える'))));
     const preferred = ['main', 'master'].find((name) => d.local.some((b) => b.name === name));
-    const hasProduction = d.local.length > 0;
-    return h('div', { class: 'card', style: { display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' } },
-      h('div', { class: 'grow' },
-        h('b', {}, 'GitFlowで作業を始める'),
-        h('p', { class: 'muted', style: { margin: '5px 0 0', fontSize: '13px', whiteSpace: 'pre-wrap' } },
-          '本番用の分岐（main / master）と、開発用の分岐（develop）を準備します。機能追加は feature/名前、公開準備は release/名前、緊急修正は hotfix/名前、という名前の付け方も保存します。')),
-      h('button', { class: 'btn', disabled: !hasProduction || !st.hasCommits || st.detached || !!st.operation, title: !st.hasCommits ? '最初の変更を記録してから使えます' : '', onclick: () => initializeGitFlow(d, st, preferred) }, 'GitFlowを初期化'));
+    const hasBase = d.local.length > 0;
+    const allowed = hasBase && S.hasRemote && st.hasCommits && !st.detached && !st.operation;
+    return h('div', {},
+      h('div', { class: 'card', style: { display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' } },
+        h('div', { class: 'grow' }, h('b', {}, 'GitHub Flowで作業を始める'), h('p', { class: 'muted', style: { margin: '5px 0 0', fontSize: '13px' } }, '基準ブランチから機能ごとの分岐を作り、プルリクエストで確認してから取り込みます。developやrelease用の分岐は作りません。')),
+        h('button', { class: 'btn primary', disabled: !allowed, title: !S.hasRemote ? '先にGitHubへアップロードしてください' : '', onclick: () => initializeGitHubFlow(d, st) }, 'GitHub Flowを初期化')),
+      h('div', { class: 'card', style: { display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' } },
+        h('div', { class: 'grow' }, h('b', {}, 'GitFlowで作業を始める'), h('p', { class: 'muted', style: { margin: '5px 0 0', fontSize: '13px' } }, 'developに機能を集め、releaseやhotfixを使う運用です。')),
+        h('button', { class: 'btn', disabled: !hasBase || !st.hasCommits || st.detached || !!st.operation, onclick: () => initializeGitFlow(d, st, preferred) }, 'GitFlowを初期化')));
+  }
+
+  async function initializeGitHubFlow(d, st) {
+    const preferred = ['main', 'master'].find((name) => d.local.some((b) => b.name === name)) || st.branch;
+    const r = await formDialog({ title: 'GitHub Flowを初期化', okLabel: '初期化する',
+      intro: 'GitHub Flowは基準ブランチを安定させ、作業ブランチの変更をプルリクエストで確認してから戻す進め方です。分岐の作成・削除やファイルの変更は行わず、このプロジェクトの設定に保存します。',
+      fields: [
+        { key: 'base', label: '基準ブランチ', type: 'select', value: preferred, options: d.local.map((b) => ({ value: b.name, label: b.name })) },
+        { key: 'prefix', label: '作業ブランチの接頭辞', value: 'feature/', required: true, help: '例：feature/、fix/。タスク名の前に自動で付きます。' },
+      ] });
+    if (!r) return;
+    const savedStash = await stashBeforeGitFlow('初期化');
+    if (!savedStash.ok) return;
+    const result = await withBusy('GitHub Flowを初期化中…', () => G('initializeGitHubFlow', { baseBranch: r.base, prefix: r.prefix }));
+    if (result) {
+      toast(`GitHub Flowを初期化しました。基準は「${result.baseBranch}」、作業分岐は「${result.prefix}名前」です。`);
+      await refreshAll();
+    } else if (savedStash.name) toast(`作業内容は一時退避「${savedStash.name}」に保存されたままです。`, 'error');
+  }
+
+  async function beginGitHubFlow() {
+    const r = await formDialog({ title: 'GitHub Flowの機能分岐を作る', okLabel: '作成して切り替える',
+      intro: `最新の「${githubFlowConfig.baseBranch}」から作業分岐を作ります。完了後はアップロードして、GitHubでプルリクエストを作成してください。`,
+      fields: [{ key: 'name', label: '機能・修正の名前', required: true, placeholder: '例：login-screen', help: `「${githubFlowConfig.prefix}」は自動で付きます。` }] });
+    if (!r) return;
+    const savedStash = await stashBeforeGitFlow('作業分岐を作成');
+    if (!savedStash.ok) return;
+    const result = await withBusy('基準ブランチを更新して作業分岐を作成中…', () => G('beginGitHubFlowBranch', { name: r.name }));
+    if (result) { toast(`「${result.branch}」を作成しました。作業後にアップロードしてプルリクエストを作ってください。`); await refreshAll(); }
+    else if (savedStash.name) toast(`作業内容は一時退避「${savedStash.name}」に保存されたままです。`, 'error');
   }
 
   /** 折りたたみできる一覧。開閉の状態は画面を更新しても保たれる */
