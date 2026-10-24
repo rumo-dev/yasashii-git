@@ -261,6 +261,7 @@ Views.tasks = (() => {
         h('button', { class: 'btn small', onclick: () => act(() => assign(t, !assigned)) }, assigned ? '担当から外れる' : '👤 担当を自分にする'),
         h('button', { class: 'btn small', onclick: () => act(() => edit(t)) }, '✏️ 名前・内容を編集'),
         h('button', { class: 'btn small', onclick: () => act(() => comment(t)) }, '💬 コメント'),
+        h('button', { class: 'btn small danger', onclick: () => act(() => deleteTask(t)) }, '🗑️ タスクを削除'),
         h('button', { class: 'btn small', onclick: () => APP('openExternal', t.url).catch(showError) }, '🌐 ブラウザで開く')));
     await modal({ title: `#${t.number} ${t.title}`, wide: true, body, buttons: [{ label: '閉じる', kind: 'primary', value: true }] });
   }
@@ -278,6 +279,20 @@ Views.tasks = (() => {
     const r = await formDialog({ title: `#${t.number} にコメント`, okLabel: '送信する', fields: [{ key: 'body', label: 'コメント', type: 'textarea', rows: 5, required: true }] });
     if (!r) return;
     if (await withBusy('送信中…', () => GH('commentIssue', S.repo, t.number, r.body))) { toast('送信しました ✓'); draw(false); }
+  }
+  async function deleteTask(t) {
+    const confirmed = await confirmDialog({
+      title: `#${t.number} を削除しますか？`,
+      message: `「${t.title}」をGitHubから完全に削除します。タスクの内容やコメントは失われ、元に戻せません。`,
+      okLabel: '完全に削除', danger: true,
+      note: '削除にはリポジトリでIssueを削除できる権限が必要です。'
+    });
+    if (!confirmed) return;
+    if (await withBusy('削除中…', () => GH('deleteIssue', S.repo, t.number))) {
+      toast('タスクを削除しました');
+      tasks = null;
+      draw(true);
+    }
   }
 
   return { render, onStatus };

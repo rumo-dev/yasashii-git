@@ -364,6 +364,20 @@ async function createIssue(cwd, { title, body = '' } = {}) {
 }
 async function closeIssue(cwd, number) { await run(['issue', 'close', String(number)], { cwd }); return true; }
 async function reopenIssue(cwd, number) { await run(['issue', 'reopen', String(number)], { cwd }); return true; }
+/** GitHub Issueを完全に削除する（GitHub側の権限が必要。復元不可） */
+async function deleteIssue(cwd, number) {
+  const n = String(Number(number));
+  if (!/^\d+$/.test(n) || Number(n) < 1) throw new GhError('タスク番号が正しくありません。', String(number));
+  const issue = await json(['api', `repos/{owner}/{repo}/issues/${n}`], { cwd });
+  if (!issue || !issue.node_id) throw new GhError('GitHubからタスクの情報を取得できませんでした。', 'Issue node_id is missing');
+  const result = await json(['api', 'graphql', '-f', 'query=mutation($issueId: ID!) { deleteIssue(input: { issueId: $issueId }) { repository { id } } }', '-F', `issueId=${issue.node_id}`], { cwd });
+  if (result && result.errors && result.errors.length) {
+    const detail = result.errors.map((e) => e.message).join('\n');
+    throw new GhError(friendly(detail), detail);
+  }
+  if (!result || !result.data || !result.data.deleteIssue) throw new GhError('GitHubでタスクを削除できたか確認できませんでした。', JSON.stringify(result));
+  return true;
+}
 async function commentIssue(cwd, number, body) { await run(['issue', 'comment', String(number), '--body', body], { cwd }); return true; }
 
 /* ------------------------- やさしいGit フォーラム ------------------------- */
@@ -687,6 +701,6 @@ module.exports = {
   listActionsTemplates, listLocalActionsWorkflows, readLocalActionsWorkflow, saveLocalActionsWorkflow, createLocalActionsWorkflow,
   listActionsWorkflows, listActionsRuns, runActionsWorkflow, setActionsWorkflowEnabled, getActionsRun, getActionsRunLog, cancelActionsRun, rerunActionsRun,
   listPRs, viewPR, findPRForBranch, createPR, mergePR, closePR, reopenPR, checkoutPR, commentPR, updatePRBranch, requestPRReview, reviewPR,
-  listIssues, listTasks, setTaskStatus, assignTaskToMe, createTask, editTask, viewIssue, createIssue, closeIssue, reopenIssue, commentIssue,
+  listIssues, listTasks, setTaskStatus, assignTaskToMe, createTask, editTask, viewIssue, createIssue, closeIssue, reopenIssue, deleteIssue, commentIssue,
   forumList, forumCreate, forumComment,
 };
