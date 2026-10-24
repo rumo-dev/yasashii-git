@@ -101,12 +101,12 @@ Views.tasks = (() => {
   async function move(t, status) {
     const prev = t.status;
     if (status === 'doing' && prev !== 'doing') {
-      let flow, existingBranch;
+      let flow, githubFlow, existingBranch;
       try {
-        [flow, existingBranch] = await Promise.all([G('gitFlowConfig'), G('getTaskBranch', t.number)]);
+        [flow, githubFlow, existingBranch] = await Promise.all([G('gitFlowConfig'), G('githubFlowConfig'), G('getTaskBranch', t.number)]);
       } catch (e) { await showError(e); return; }
       if (!existingBranch) {
-        try { existingBranch = await findTaskBranch(t, flow); } catch (e) { await showError(e); return; }
+        try { existingBranch = await findTaskBranch(t, flow, githubFlow); } catch (e) { await showError(e); return; }
       }
       let flowType = null;
       if (flow && !existingBranch) {
@@ -133,6 +133,7 @@ Views.tasks = (() => {
       try {
         if (existingBranch) await withBusyThrow('タスクの分岐へ切り替え中…', () => G('switchBranch', existingBranch));
         else if (flowType) await withBusyThrow('GitFlowのタスク分岐を作成中…', () => G('beginGitFlowBranch', { type: flowType, name: taskBranch(t), issueNumber: t.number }));
+        else if (githubFlow) await withBusyThrow('GitHub Flowの作業分岐を作成中…', () => G('beginGitHubFlowBranch', { name: taskBranch(t), issueNumber: t.number }));
         else await withBusyThrow('タスクの分岐を作成中…', () => G('createTaskBranch', { name: taskBranch(t), issueNumber: t.number }));
       } catch (e) { await showError(e); if (stashName) toast(`変更は一時退避「${stashName}」に保存されたままです。`, 'error'); return; }
     }
@@ -152,17 +153,32 @@ Views.tasks = (() => {
     // Gitのブランチ名に使えない文字だけを整え、日本語を含むタイトルはそのまま残す。
     let name = String(t.title || '').trim().replace(/[\s\x00-\x20~^:?*\[\\/]/g, '-').replace(/\.\./g, '-').replace(/@\{/g, '-');
     // Gitは先頭のハイフンもブランチ名として受け付けない。
-    name = name.replace(/^[.-]+|[.-]+$/g, '').replace(/\.lock$/i, '');
-    return name || `issue-${t.number}`;
+    name = name.replace(/^[.-]+|[.-]+$/g, '').replace(/\.lock$/i, '').slice(0, 180).replace(/[.-]+$/g, '');
+    // 異なる課題に同じタイトルが付いても、同じ作業ブランチを共有しない。
+    return `${name || 'task'}-${t.number}`;
   }
 
-  async function findTaskBranch(t, flow) {
+  function legacyTaskBranch(t) {
+    return String(t.title || '').trim().replace(/[\s\x00-\x20~^:?*\[\\/]/g, '-').replace(/\.\./g, '-').replace(/@\{/g, '-')
+      .replace(/^[.-]+|[.-]+$/g, '').replace(/\.lock$/i, '') || `issue-${t.number}`;
+  }
+
+  async function findTaskBranch(t, flow, githubFlow) {
     const expected = taskBranch(t);
+    const legacy = legacyTaskBranch(t);
     const branches = (await G('branches')).local.map((b) => b.name);
-    const candidates = new Set(branches.filter((name) => name === expected));
+    const candidates = new Set(branches.filter((name) => name === expected || name === legacy));
     if (flow) for (const type of ['feature', 'release', 'hotfix']) {
-      const name = flow.prefixes[type] + expected;
+      for (const suffix of new Set([expected, legacy])) {
+        const name = flow.prefixes[type] + suffix;
+        if (branches.includes(name)) candidates.add(name);
+      }
+    }
+    if (githubFlow) {
+      const name = githubFlow.prefix + expected;
       if (branches.includes(name)) candidates.add(name);
+      const oldName = githubFlow.prefix + legacy;
+      if (branches.includes(oldName)) candidates.add(oldName);
     }
     if (candidates.size !== 1) return null;
     const branch = [...candidates][0];
@@ -172,10 +188,10 @@ Views.tasks = (() => {
 
   async function finishTaskBranch(t) {
     const flow = await G('gitFlowConfig');
-    const branch = await G('getTaskBranch', t.number) || await findTaskBranch(t, flow) || taskBranch(t);
+    const githubFlow = await G('githubFlowConfig');
+    const branch = await G('getBoundTaskBranch', t.number) || await G('getTaskBranch', t.number) || await findTaskBranch(t, flow, githubFlow) || taskBranch(t);
     const status = await G('status');
     const branches = await G('branches');
-    if (!branches.local.some((b) => b.name === branch)) return true;
     if (status.files.length) throw new Error('未コミットの変更があります。変更を記録してから完了にしてください。');
     const flowType = flow && ['feature', 'release', 'hotfix'].find((type) => branch.startsWith(flow.prefixes[type]) && branch.length > flow.prefixes[type].length);
     if (flowType) {
@@ -193,27 +209,33 @@ Views.tasks = (() => {
       if (finished) return true;
       return false;
     }
-    await withBusyThrow('サーバーの更新を確認中…', () => G('fetch'));
-    const refreshed = await G('branches');
-    const candidates = refreshed.local.filter((b) => b.name !== branch && b.upstream);
-    if (!candidates.length) throw new Error('取り込み先にできる分岐の追跡先が見つかりません。分岐を更新してから完了してください。');
-    const preferred = ['main', 'master', 'develop'].find((n) => candidates.some((b) => b.name === n)) || candidates[0].name;
-    const choice = await formDialog({ title: 'タスクの変更をどこに取り込みますか？', okLabel: '選択する',
-      intro: `「${branch}」の作業を取り込む分岐を選んでください。選んだ分岐に切り替えてから合流します。`,
-      fields: [{ key: 'base', label: '取り込み先の分岐', type: 'select', value: preferred,
-        options: candidates.map((b) => ({ value: b.name, label: b.name })) }] });
-    if (!choice) return false;
-    const base = choice.base;
-    const target = refreshed.local.find((b) => b.name === base);
-    if (target.behind > 0) throw new Error(`「${base}」にサーバー上の更新が ${target.behind} 件あります。先に「最新を取り込む」で更新してから完了してください。`);
-    await withBusyThrow('取り込み先へ切り替え中…', () => G('switchBranch', base));
-    // 早送り合流だと履歴が一直線になり、タスク用に分岐したことが見えなくなる。
-    // タスクの完了は明示的な合流記録を残して、履歴図にも分岐を表示する。
-    const merged = await withBusyThrow('タスクの変更を取り込み中…', () => G('merge', branch, { noFastForward: true }));
-    if (merged && merged.conflict) throw new Error('取り込みで競合が発生しました。競合を解決してから、もう一度完了にしてください。');
-    await withBusyThrow('タスクの分岐を削除中…', () => G('deleteBranch', branch));
-    await G('removeTaskBranchBinding', branch);
-    return true;
+    const pr = await withBusyThrow('GitHubの提案を確認中…', () => GH('findPRForBranch', S.repo, branch));
+    if (pr && pr.state === 'MERGED') {
+      await G('removeTaskBranchBinding', branch);
+      return true;
+    }
+    if (pr && pr.state === 'CLOSED') {
+      if (!await confirmDialog({ title: '閉じた提案をもう一度開きますか？', message: `「${pr.title}」は取り込まれずに閉じられています。もう一度レビューしてもらうため、同じ提案を開き直します。`, okLabel: '開き直す' })) return false;
+      await withBusyThrow('提案を開き直しています…', () => GH('reopenPR', S.repo, pr.number));
+      if (pr.url) APP('openExternal', pr.url).catch(() => {});
+      toast('提案を開き直しました。取り込み後にタスクを完了してください。');
+      return false;
+    }
+    if (pr && pr.state === 'OPEN') {
+      if (pr.url) APP('openExternal', pr.url).catch(() => {});
+      toast(`#${pr.number} はレビュー中です。取り込まれるとGitHubがタスクを完了にします。`);
+      return false;
+    }
+    if (!branches.local.some((b) => b.name === branch)) throw new Error(`タスクの作業分岐「${branch}」が手元にありません。GitHubで提案を確認するか、作業分岐を復元してください。`);
+    const repoInfo = await withBusyThrow('取り込み先を確認中…', () => GH('currentRepo', S.repo));
+    const base = githubFlow && githubFlow.baseBranch || repoInfo && repoInfo.defaultBranchRef && repoInfo.defaultBranchRef.name;
+    if (!base) throw new Error('GitHubの標準の取り込み先を確認できません。GitHub画面から提案を作成してください。');
+    const created = await withBusyThrow('変更の提案を作成中…', () => GH('createPR', S.repo, {
+      title: t.title, body: `Closes #${t.number}\n\nこの提案はタスク #${t.number} の変更です。レビュー後、GitHubで取り込んでください。`, base, head: branch,
+    }));
+    if (created && created.url) APP('openExternal', created.url).catch(() => {});
+    toast('変更の提案を作りました。レビュー後に取り込まれると、タスクも自動で完了します。');
+    return false;
   }
   async function createTask(status) {
     const r = await formDialog({ title: '＋ タスクを追加', okLabel: '追加する',

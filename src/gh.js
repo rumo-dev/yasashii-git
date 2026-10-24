@@ -301,12 +301,18 @@ async function commitAuthorAvatar(cwd, hash) {
 }
 
 /* ------------------------ 変更の提案（PR） ------------------------ */
-const PR_FIELDS = 'number,title,author,state,url,headRefName,baseRefName,isDraft,createdAt,updatedAt';
+const PR_FIELDS = 'number,title,author,state,url,headRefName,baseRefName,isDraft,createdAt,updatedAt,mergeable,reviewDecision';
 async function listPRs(cwd, state = 'open') {
   return json(['pr', 'list', '--state', state, '--limit', '50', '--json', PR_FIELDS], { cwd });
 }
 async function viewPR(cwd, number) {
   return json(['pr', 'view', String(number), '--json', PR_FIELDS + ',body,mergeable,reviewDecision,additions,deletions,changedFiles,comments'], { cwd });
+}
+async function findPRForBranch(cwd, branch) {
+  branch = String(branch || '').trim();
+  if (!branch) return null;
+  const list = await json(['pr', 'list', '--state', 'all', '--head', branch, '--limit', '10', '--json', PR_FIELDS], { cwd });
+  return (list || []).find((pr) => pr.headRefName === branch) || null;
 }
 async function createPR(cwd, { title, body = '', base, head, draft = false } = {}) {
   if (!title || !title.trim()) throw new GhError('タイトルを入力してください。', '');
@@ -328,6 +334,20 @@ async function closePR(cwd, number) { await run(['pr', 'close', String(number)],
 async function reopenPR(cwd, number) { await run(['pr', 'reopen', String(number)], { cwd }); return true; }
 async function checkoutPR(cwd, number) { await run(['pr', 'checkout', String(number)], { cwd }); return true; }
 async function commentPR(cwd, number, body) { await run(['pr', 'comment', String(number), '--body', body], { cwd }); return true; }
+/** PRの作業ブランチに本流の最新内容を取り込み、競合解消を促す */
+async function updatePRBranch(cwd, number) { await run(['pr', 'update-branch', String(number)], { cwd }); return true; }
+/** PRのレビュー担当者を指定する */
+async function requestPRReview(cwd, number, reviewers) {
+  const names = [...new Set((Array.isArray(reviewers) ? reviewers : String(reviewers || '').split(',')).map((x) => String(x).trim().replace(/^@/, '')).filter((x) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(x)))];
+  if (!names.length) throw new GhError('GitHubのユーザー名を入力してください。', '');
+  await run(['pr', 'edit', String(number), ...names.flatMap((name) => ['--add-reviewer', name])], { cwd }); return true;
+}
+/** レビュー結果をGitHubに送る。レビュー承認などはGitHubの権限ルールに従う */
+async function reviewPR(cwd, number, decision, body = '') {
+  const action = { approve: '--approve', changes: '--request-changes', comment: '--comment' }[decision];
+  if (!action) throw new GhError('レビューの操作を選び直してください。', String(decision));
+  await run(['pr', 'review', String(number), action, ...(body.trim() ? ['--body', body.trim()] : [])], { cwd }); return true;
+}
 
 /* ------------------------- 課題・相談（Issue） ------------------------- */
 const ISSUE_FIELDS = 'number,title,author,state,url,labels,createdAt,updatedAt,comments';
@@ -666,7 +686,7 @@ module.exports = {
   listReleases, createRelease,
   listActionsTemplates, listLocalActionsWorkflows, readLocalActionsWorkflow, saveLocalActionsWorkflow, createLocalActionsWorkflow,
   listActionsWorkflows, listActionsRuns, runActionsWorkflow, setActionsWorkflowEnabled, getActionsRun, getActionsRunLog, cancelActionsRun, rerunActionsRun,
-  listPRs, viewPR, createPR, mergePR, closePR, reopenPR, checkoutPR, commentPR,
+  listPRs, viewPR, findPRForBranch, createPR, mergePR, closePR, reopenPR, checkoutPR, commentPR, updatePRBranch, requestPRReview, reviewPR,
   listIssues, listTasks, setTaskStatus, assignTaskToMe, createTask, editTask, viewIssue, createIssue, closeIssue, reopenIssue, commentIssue,
   forumList, forumCreate, forumComment,
 };
