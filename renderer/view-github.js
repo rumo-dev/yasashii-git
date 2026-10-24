@@ -136,11 +136,28 @@ Views.github = (() => {
         h('span', {}, r.isPrivate ? '🔒' : '📖'),
         h('div', { class: 'grow' }, h('div', { class: 'title' }, h('b', {}, r.nameWithOwner), ' ', r.isFork ? h('span', { class: 'pill' }, 'フォーク') : null), h('div', { class: 'muted title', style: { fontSize: '12px' } }, r.description || '（説明なし）')),
         h('span', { class: 'muted', style: { fontSize: '12px' } }, relTime(r.updatedAt)),
-        h('div', { class: 'btn-row' }, h('button', { class: 'btn small primary', onclick: () => cloneFlow(r.nameWithOwner) }, '⬇ ダウンロード'), h('button', { class: 'btn small', onclick: () => APP('openExternal', r.url) }, 'ブラウザで開く'))))));
+        h('div', { class: 'btn-row' },
+          r.permission === 'admin' ? h('button', { class: 'btn small', onclick: () => changeVisibility(r) }, r.isPrivate ? '📖 公開にする' : '🔒 非公開にする') : null,
+          h('button', { class: 'btn small primary', onclick: () => cloneFlow(r.nameWithOwner) }, '⬇ ダウンロード'),
+          h('button', { class: 'btn small', onclick: () => APP('openExternal', r.url) }, 'ブラウザで開く'))))));
     };
     filter.addEventListener('input', drawList);
     body.append(filter, listEl);
     drawList();
+  }
+
+  async function changeVisibility(repo) {
+    const makePrivate = !repo.isPrivate;
+    const message = makePrivate
+      ? `「${repo.nameWithOwner}」を非公開にします。今後は許可された人だけがGitHub上で見られます。すでに取得されたコピーやフォークは、この変更では消えません。`
+      : `「${repo.nameWithOwner}」を公開します。ソースコードやコミット履歴など、リポジトリ内の内容を誰でも見られるようになります。秘密情報が履歴に残っていないか確認してください。`;
+    const ok = await confirmDialog({ title: makePrivate ? 'リポジトリを非公開にしますか？' : 'リポジトリを公開しますか？', message, okLabel: makePrivate ? '非公開にする' : '公開する', danger: !makePrivate });
+    if (!ok) return;
+    const changed = await withBusy('公開範囲を変更中…', () => GH('setRepoVisibility', repo.nameWithOwner, makePrivate));
+    if (!changed) return;
+    repo.isPrivate = changed.isPrivate;
+    toast(makePrivate ? '非公開にしました' : '公開しました');
+    draw();
   }
 
   /* ---------------- 変更の提案（PR） ---------------- */

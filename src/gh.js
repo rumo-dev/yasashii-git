@@ -284,6 +284,15 @@ async function createRepo(cwd, { name, description = '', isPrivate = true } = {}
   return { url: (r.stdout.match(/https:\/\/github\.com\/\S+/) || [''])[0] };
 }
 
+/** GitHubリポジトリの公開範囲を切り替える（管理者権限が必要） */
+async function setRepoVisibility(ref, isPrivate) {
+  ref = checkRef(ref);
+  if (typeof isPrivate !== 'boolean') throw new GhError('公開範囲の指定が正しくありません。', String(isPrivate));
+  const updated = await json(['api', '-X', 'PATCH', `repos/${ref}`, '-F', `private=${isPrivate}`]);
+  if (typeof updated.private !== 'boolean') throw new GhError('GitHubで公開範囲を変更できたか確認できませんでした。', JSON.stringify(updated));
+  return { isPrivate: updated.private };
+}
+
 async function currentRepo(cwd) {
   try { return await json(['repo', 'view', '--json', 'nameWithOwner,url,description,isPrivate,defaultBranchRef'], { cwd }); }
   catch (e) { return null; }
@@ -696,7 +705,7 @@ async function markAllNotificationsRead() { await run(['api', '-X', 'PUT', 'noti
 
 module.exports = {
   GhError, friendly, available, installPlan, installCli, extendPath, authStatus, switchAccount, ensureGitCredentials, myNotifications, markNotificationRead, markAllNotificationsRead, refreshGitCredentials, loginWithToken, loginWeb, cancelLogin, logout,
-  listRepos, createRepo, currentRepo, commitAuthorAvatar, listMembers, listSentInvites, inviteMember, cancelSentInvite, removeMember, myInvites, acceptInvite, declineInvite, checkAccess, myLogin, myProfile,
+  listRepos, createRepo, setRepoVisibility, currentRepo, commitAuthorAvatar, listMembers, listSentInvites, inviteMember, cancelSentInvite, removeMember, myInvites, acceptInvite, declineInvite, checkAccess, myLogin, myProfile,
   listReleases, createRelease,
   listActionsTemplates, listLocalActionsWorkflows, readLocalActionsWorkflow, saveLocalActionsWorkflow, createLocalActionsWorkflow,
   listActionsWorkflows, listActionsRuns, runActionsWorkflow, setActionsWorkflowEnabled, getActionsRun, getActionsRunLog, cancelActionsRun, rerunActionsRun,
