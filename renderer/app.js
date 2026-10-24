@@ -657,15 +657,21 @@ function ghSafeName(name) {
 /** このプロジェクトをGitHubに新しく作って結びつける。thenPush: そのままアップロードまで行う */
 async function publishToGitHub({ thenPush = false } = {}) {
   const safe = ghSafeName(S.repoName);
+  const ignoreTemplates = await G('ignoreTemplates');
   const r = await formDialog({
     title: '☁️ GitHubにアップロードする準備',
     okLabel: thenPush ? '作成してアップロード' : '作成する',
-    intro: 'このプロジェクトは、まだGitHubにありません。GitHub上に新しく作って、自動でつなぎます。URLの入力は要りません。',
+    intro: 'このプロジェクトは、まだGitHubにありません。GitHub上に新しく作って、自動でつなぎます。作成前に .gitignore のテンプレートも選べます。',
     fields: [
       { key: 'name', label: 'GitHub上の名前', value: safe, required: true, help: safe !== S.repoName.trim() ? 'GitHubの名前には英数字と - _ . が使えます。日本語は使えないため、自動で変換しています。' : '半角の英数字と - _ . が使えます。' },
+      { key: 'ignoreTemplate', label: '.gitignore テンプレート', type: 'select', value: 'none', options: ignoreTemplates, help: '選ぶと、GitHubリポジトリを作る前にローカルの .gitignore へ追加します。既存の設定は残ります。' },
       { key: 'isPrivate', label: '自分だけが見られる「非公開」にする', type: 'checkbox', value: true, help: 'チェックを外すと、誰でも見られる「公開」になります。あとから変更もできます。' }] });
   if (!r) return false;
   const name = ghSafeName(r.name);
+  if (r.ignoreTemplate && r.ignoreTemplate !== 'none') {
+    const applied = await withBusy('.gitignore を準備中…', () => G('applyIgnoreTemplate', r.ignoreTemplate));
+    if (!applied) return false;
+  }
   const made = await withBusy('GitHubに作成中…', () => GH('createRepo', S.repo, { name, isPrivate: r.isPrivate }));
   if (!made) return false;
   S.hasRemote = true;
