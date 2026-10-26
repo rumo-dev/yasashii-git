@@ -1,10 +1,11 @@
 'use strict';
-/* 「タスク」画面：GitHubの課題（Issue）を「未着手／進行中／完了」のボードで管理する */
+/* 「タスク」画面：GitHubの課題（Issue）を「未着手／進行中／レビュー待ち／完了」のボードで管理する */
 Views.tasks = (() => {
   let root, tasks = null, me = null, onlyMine = false, searchText = '', priorityFilter = 'all', sortBy = 'priority', token = 0;
   const COLS = [
     { id: 'todo', ico: '📋', label: '未着手', hint: 'まだ取りかかっていないタスク' },
     { id: 'doing', ico: '🚧', label: '進行中', hint: 'いま取りかかっているタスク（GitHubでは「進行中」ラベルが付きます）' },
+    { id: 'review', ico: '👀', label: 'レビュー待ち', hint: '変更の提案をアプリ内でレビューできます' },
     { id: 'done', ico: '✅', label: '完了', hint: '終わったタスク（GitHubでは課題が「完了（Closed）」になります）' },
   ];
 
@@ -137,6 +138,10 @@ Views.tasks = (() => {
         else await withBusyThrow('タスクの分岐を作成中…', () => G('createTaskBranch', { name: taskBranch(t), issueNumber: t.number }));
       } catch (e) { await showError(e); if (stashName) toast(`変更は一時退避「${stashName}」に保存されたままです。`, 'error'); return; }
     }
+    if (status === 'review' && prev !== 'review') {
+      try { await ensureTaskPR(t); }
+      catch (e) { await showError(e); return; }
+    }
     if (status === 'done' && prev !== 'done') {
       try {
         if (!await finishTaskBranch(t)) return;
@@ -144,7 +149,7 @@ Views.tasks = (() => {
     }
     t.status = status;                        // 先に画面へ反映（早く見える）
     paint();
-    const r = await withBusy('更新中…', () => GH('setTaskStatus', S.repo, t.number, status, { state: t.state, doing: prev === 'doing' }));
+    const r = await withBusy('更新中…', () => GH('setTaskStatus', S.repo, t.number, status, { state: t.state, doing: (t.labels || []).some((l) => l.name === '進行中'), review: (t.labels || []).some((l) => l.name === 'レビュー待ち') }));
     if (r === undefined) t.status = prev;     // 失敗したら元に戻す
     await draw(false);
   }
@@ -186,6 +191,30 @@ Views.tasks = (() => {
     return branch;
   }
 
+  async function ensureTaskPR(t) {
+    const flow = await G('gitFlowConfig');
+    const githubFlow = await G('githubFlowConfig');
+    const branch = await G('getBoundTaskBranch', t.number) || await G('getTaskBranch', t.number) || await findTaskBranch(t, flow, githubFlow);
+    if (!branch) throw new Error('このタスクの作業分岐が見つかりません。タスクを進行中にして作業分岐を作ってください。');
+    let pr = await withBusyThrow('関連する提案を確認中…', () => GH('findPRForBranch', S.repo, branch));
+    if (pr && pr.state === 'OPEN') return pr;
+    if (pr && pr.state === 'MERGED') throw new Error('このタスクの提案はすでに取り込まれています。タスクを完了にしてください。');
+    if (pr && pr.state === 'CLOSED') throw new Error('関連する提案は閉じられています。GitHub画面から開き直してから再試行してください。');
+    const st = await G('status');
+    if (st.files.length) throw new Error('未コミットの変更があります。変更を記録してからレビュー待ちにしてください。');
+    if (st.branch !== branch) throw new Error(`作業分岐「${branch}」に切り替えてから、レビュー待ちにしてください。`);
+    if (!await doPush()) throw new Error('アップロードが完了していないため、提案を作成しませんでした。');
+    const repoInfo = await withBusyThrow('提案の取り込み先を確認中…', () => GH('currentRepo', S.repo));
+    const flowType = flow && ['feature', 'release', 'hotfix'].find((type) => branch.startsWith(flow.prefixes[type]) && branch.length > flow.prefixes[type].length);
+    const base = flowType ? flow.developmentBranch : githubFlow && githubFlow.baseBranch || repoInfo && repoInfo.defaultBranchRef && repoInfo.defaultBranchRef.name;
+    if (!base) throw new Error('提案の取り込み先を確認できません。');
+    const created = await withBusyThrow('変更の提案を作成中…', () => GH('createPR', S.repo, {
+      title: t.title, body: `Closes #${t.number}\n\nこの提案はタスク #${t.number} の変更です。レビュー後、取り込んでください。`, base, head: branch,
+    }));
+    toast('提案を作成しました。タスクの「確認・レビュー」から差分を確認できます。');
+    return { ...created, number: Number((created.url || '').match(/\/pull\/(\d+)/)?.[1]), state: 'OPEN', title: t.title, url: created.url };
+  }
+
   async function finishTaskBranch(t) {
     const flow = await G('gitFlowConfig');
     const githubFlow = await G('githubFlowConfig');
@@ -217,13 +246,11 @@ Views.tasks = (() => {
     if (pr && pr.state === 'CLOSED') {
       if (!await confirmDialog({ title: '閉じた提案をもう一度開きますか？', message: `「${pr.title}」は取り込まれずに閉じられています。もう一度レビューしてもらうため、同じ提案を開き直します。`, okLabel: '開き直す' })) return false;
       await withBusyThrow('提案を開き直しています…', () => GH('reopenPR', S.repo, pr.number));
-      if (pr.url) APP('openExternal', pr.url).catch(() => {});
       toast('提案を開き直しました。取り込み後にタスクを完了してください。');
       return false;
     }
     if (pr && pr.state === 'OPEN') {
-      if (pr.url) APP('openExternal', pr.url).catch(() => {});
-      toast(`#${pr.number} はレビュー中です。取り込まれるとGitHubがタスクを完了にします。`);
+      toast(`#${pr.number} はレビュー中です。「確認・レビュー」から差分を確認できます。`);
       return false;
     }
     if (!branches.local.some((b) => b.name === branch)) throw new Error(`タスクの作業分岐「${branch}」が手元にありません。GitHubで提案を確認するか、作業分岐を復元してください。`);
@@ -233,8 +260,7 @@ Views.tasks = (() => {
     const created = await withBusyThrow('変更の提案を作成中…', () => GH('createPR', S.repo, {
       title: t.title, body: `Closes #${t.number}\n\nこの提案はタスク #${t.number} の変更です。レビュー後、GitHubで取り込んでください。`, base, head: branch,
     }));
-    if (created && created.url) APP('openExternal', created.url).catch(() => {});
-    toast('変更の提案を作りました。レビュー後に取り込まれると、タスクも自動で完了します。');
+    toast('変更の提案を作りました。タスクを「レビュー待ち」に移すとアプリ内で差分を確認できます。');
     return false;
   }
   async function createTask(status) {
@@ -258,6 +284,7 @@ Views.tasks = (() => {
         h('span', { class: 'muted' }, `作成：${t.author ? t.author.login : ''}　${relTime(t.createdAt)}`)),
       h('div', { class: 'task-body' }, t.body && t.body.trim() ? t.body : h('span', { class: 'muted' }, '（くわしい内容はありません）')),
       h('div', { class: 'btn-row', style: { marginTop: '12px' } },
+        t.status === 'review' ? h('button', { class: 'btn small primary', onclick: () => act(async () => { const branch = await G('getBoundTaskBranch', t.number) || await G('getTaskBranch', t.number); const pr = await GH('findPRForBranch', S.repo, branch); if (pr && Views.github && Views.github.inspectPR) await Views.github.inspectPR(pr); else toast('関連する提案が見つかりません。', 'error'); }) }, '👀 確認・レビュー') : null,
         h('button', { class: 'btn small', onclick: () => act(() => assign(t, !assigned)) }, assigned ? '担当から外れる' : '👤 担当を自分にする'),
         h('button', { class: 'btn small', onclick: () => act(() => edit(t)) }, '✏️ 名前・内容を編集'),
         h('button', { class: 'btn small', onclick: () => act(() => comment(t)) }, '💬 コメント'),

@@ -315,7 +315,11 @@ async function listPRs(cwd, state = 'open') {
   return json(['pr', 'list', '--state', state, '--limit', '50', '--json', PR_FIELDS], { cwd });
 }
 async function viewPR(cwd, number) {
-  return json(['pr', 'view', String(number), '--json', PR_FIELDS + ',body,mergeable,reviewDecision,additions,deletions,changedFiles,comments'], { cwd });
+  return json(['pr', 'view', String(number), '--json', PR_FIELDS + ',body,mergeable,reviewDecision,additions,deletions,changedFiles,comments,reviews'], { cwd });
+}
+async function diffPR(cwd, number) {
+  const r = await run(['pr', 'diff', String(number), '--color', 'never'], { cwd });
+  return r.stdout;
 }
 async function findPRForBranch(cwd, branch) {
   branch = String(branch || '').trim();
@@ -408,29 +412,35 @@ async function forumComment(number, body) {
 
 /* ------------------------- タスク管理（Issueを「未着手／進行中／完了」で管理） ------------------------- */
 const DOING_LABEL = '進行中';
+const REVIEW_LABEL = 'レビュー待ち';
 const PRIORITY_LABELS = { high: '緊急度:高', normal: '緊急度:中', low: '緊急度:低' };
 const TASK_FIELDS = 'number,title,author,state,url,labels,assignees,createdAt,updatedAt,closedAt,comments,body';
 /** 「進行中」の目印（ラベル）がなければ作る。あれば何もしない */
 async function ensureDoingLabel(cwd) {
   await run(['label', 'create', DOING_LABEL, '--color', 'fbca04', '--description', 'いま取りかかっているタスク', '--force'], { cwd });
 }
+async function ensureReviewLabel(cwd) {
+  await run(['label', 'create', REVIEW_LABEL, '--color', '5319e7', '--description', '変更の提案がレビュー待ち', '--force'], { cwd });
+}
 /** タスク一覧。status: todo(未着手) | doing(進行中) | done(完了) を付けて返す */
 async function listTasks(cwd) {
   const list = await json(['issue', 'list', '--state', 'all', '--limit', '200', '--json', TASK_FIELDS], { cwd });
   return (list || []).map((i) => {
     const doing = (i.labels || []).some((l) => l.name === DOING_LABEL);
-    const status = i.state === 'CLOSED' ? 'done' : doing ? 'doing' : 'todo';
+    const review = (i.labels || []).some((l) => l.name === REVIEW_LABEL);
+    const status = i.state === 'CLOSED' ? 'done' : review ? 'review' : doing ? 'doing' : 'todo';
     const priorityLabel = (i.labels || []).find((l) => Object.values(PRIORITY_LABELS).includes(l.name));
     const priority = Object.keys(PRIORITY_LABELS).find((key) => PRIORITY_LABELS[key] === (priorityLabel && priorityLabel.name)) || 'normal';
     return { ...i, status, priority, comments: (i.comments || []).length };
   });
 }
-/** cur: { state: 'OPEN'|'CLOSED', doing: boolean }（今の状態。余計な操作をしないために使う） */
+/** cur: { state: 'OPEN'|'CLOSED', doing: boolean, review: boolean } */
 async function setTaskStatus(cwd, number, status, cur = {}) {
   const n = String(Number(number));
-  if (!['todo', 'doing', 'done'].includes(status)) throw new GhError('状態の指定が正しくありません。', String(status));
+  if (!['todo', 'doing', 'review', 'done'].includes(status)) throw new GhError('状態の指定が正しくありません。', String(status));
   if (status === 'done') {
     if (cur.doing) await run(['issue', 'edit', n, '--remove-label', DOING_LABEL], { cwd });
+    if (cur.review) await run(['issue', 'edit', n, '--remove-label', REVIEW_LABEL], { cwd });
     if (cur.state !== 'CLOSED') await run(['issue', 'close', n], { cwd });
     return true;
   }
@@ -439,6 +449,11 @@ async function setTaskStatus(cwd, number, status, cur = {}) {
     if (!cur.doing) { await ensureDoingLabel(cwd); await run(['issue', 'edit', n, '--add-label', DOING_LABEL], { cwd }); }
   } else if (cur.doing) {
     await run(['issue', 'edit', n, '--remove-label', DOING_LABEL], { cwd });
+  }
+  if (status === 'review') {
+    if (!cur.review) { await ensureReviewLabel(cwd); await run(['issue', 'edit', n, '--add-label', REVIEW_LABEL], { cwd }); }
+  } else if (cur.review) {
+    await run(['issue', 'edit', n, '--remove-label', REVIEW_LABEL], { cwd });
   }
   return true;
 }
@@ -709,7 +724,7 @@ module.exports = {
   listReleases, createRelease,
   listActionsTemplates, listLocalActionsWorkflows, readLocalActionsWorkflow, saveLocalActionsWorkflow, createLocalActionsWorkflow,
   listActionsWorkflows, listActionsRuns, runActionsWorkflow, setActionsWorkflowEnabled, getActionsRun, getActionsRunLog, cancelActionsRun, rerunActionsRun,
-  listPRs, viewPR, findPRForBranch, createPR, mergePR, closePR, reopenPR, checkoutPR, commentPR, updatePRBranch, requestPRReview, reviewPR,
+  listPRs, viewPR, diffPR, findPRForBranch, createPR, mergePR, closePR, reopenPR, checkoutPR, commentPR, updatePRBranch, requestPRReview, reviewPR,
   listIssues, listTasks, setTaskStatus, assignTaskToMe, createTask, editTask, viewIssue, createIssue, closeIssue, reopenIssue, deleteIssue, commentIssue,
   forumList, forumCreate, forumComment,
 };

@@ -292,7 +292,7 @@ label.check input { margin-top: 4px; }
 .task-progress { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; }
 .task-progress .bar { flex: 1; height: 8px; border-radius: 5px; background: var(--border); overflow: hidden; max-width: 420px; }
 .task-progress .bar > div { height: 100%; background: var(--accent); transition: width .2s; }
-.board { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
 .col { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; min-height: 160px; display: flex; flex-direction: column; }
 .col.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
 .col-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-weight: 700; border-bottom: 1px solid var(--border); }

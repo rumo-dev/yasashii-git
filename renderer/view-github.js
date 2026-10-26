@@ -198,7 +198,7 @@ Views.github = (() => {
         { key: 'draft', label: '下書きとして作る', type: 'checkbox', value: false, help: '準備中であることを示します。' }] });
     if (!r) return;
     const res = await withBusy('提案を作成中…', () => GH('createPR', S.repo, { title: r.title, body: r.body, base: r.base, head: st.branch, draft: r.draft }));
-    if (res) { toast('変更の提案を作りました 🎉'); if (res.url) APP('openExternal', res.url).catch(() => {}); draw(); }
+    if (res) { toast('変更の提案を作りました 🎉'); draw(); }
   }
   async function mergePR(p) {
     let latest; try { latest = await GH('viewPR', S.repo, p.number); } catch (e) { showError(e); return; }
@@ -219,14 +219,22 @@ Views.github = (() => {
     return h('span', { class: `pill ${merge[1]}` }, `${merge[0]}${review ? ` · ${review[0]}` : ''}`);
   }
   async function inspectPR(p) {
-    const detail = await withBusy('提案の状態を確認中…', () => GH('viewPR', S.repo, p.number));
-    if (!detail) return;
+    const result = await withBusy('提案と差分を確認中…', async () => Promise.all([GH('viewPR', S.repo, p.number), GH('diffPR', S.repo, p.number)]));
+    if (!result) return;
+    const [detail, diff] = result;
     const mergeLabel = { MERGEABLE: '競合は検出されていません', CONFLICTING: '競合があります。作業者が解消して再アップロードしてください', UNKNOWN: 'GitHubが競合を確認中です。少し待って再確認してください' }[detail.mergeable] || '競合状況を取得できません';
     const reviewLabel = { APPROVED: 'レビュー承認済み', CHANGES_REQUESTED: '修正依頼あり', REVIEW_REQUIRED: 'レビュー承認待ち' }[detail.reviewDecision] || 'レビューは任意、または未設定です';
+    const files = String(diff || '').split(/(?=^diff --git )/m).filter((x) => x.trim());
     const body = h('div', {}, h('p', {}, mergeLabel), h('p', {}, reviewLabel),
       h('p', { class: 'muted' }, `変更 ${detail.changedFiles ?? '—'} ファイル　+${detail.additions ?? 0} / -${detail.deletions ?? 0}`),
-      h('p', { class: 'sub' }, '競合がある場合は作業ブランチを更新して修正し、同じ提案へアップロードします。新しい提案を作り直す必要はありません。'));
-    const action = await modal({ title: `#${p.number} ${p.title}`, body, buttons: [
+      h('p', { class: 'sub' }, '競合がある場合は作業ブランチを更新して修正し、同じ提案へアップロードします。新しい提案を作り直す必要はありません。'),
+      h('h3', {}, '変更内容'),
+      files.length ? files.map((file) => {
+        const first = file.split('\n').find((line) => line.startsWith('diff --git ')) || '変更ファイル';
+        const name = first.match(/^diff --git a\/(.*?) b\//)?.[1] || first;
+        return h('details', { class: 'card', open: true }, h('summary', {}, name), renderDiff(file));
+      }) : h('div', { class: 'empty' }, '表示できる差分はありません。'));
+    const action = await modal({ title: `#${p.number} ${p.title}`, wide: true, body, buttons: [
       { label: 'レビューを依頼', value: 'request' },
       { label: 'レビュー結果を送る', value: 'review' },
       { label: '作業ブランチを更新', value: 'update' },
@@ -454,5 +462,5 @@ Views.github = (() => {
     }
   }
 
-  return { render, onStatus };
+  return { render, onStatus, inspectPR };
 })();
