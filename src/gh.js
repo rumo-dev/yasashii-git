@@ -35,6 +35,8 @@ const RULES = [
     '該当する変更の提案はありません。'],
   [/a pull request for branch .* already exists/i,
     'この作業の分岐からの変更の提案は、すでに作成されています。'],
+  [/own pull request|reviews may not be submitted by pull request authors/i,
+    '自分で作成した変更の提案にはレビューを送れません。コメントを残す場合は「コメントを投稿」を使ってください。'],
   [/must first push the current branch|has not been pushed|head branch .* is not|No commits between/i,
     '先に「アップロード」して、GitHubへ作業内容を送ってから実行してください。（または、比べる相手との違いがありません）'],
   [/not a git repository/i, 'ここは Git で管理されているフォルダではありません。'],
@@ -359,7 +361,9 @@ async function requestPRReview(cwd, number, reviewers) {
 async function reviewPR(cwd, number, decision, body = '') {
   const action = { approve: '--approve', changes: '--request-changes', comment: '--comment' }[decision];
   if (!action) throw new GhError('レビューの操作を選び直してください。', String(decision));
-  await run(['pr', 'review', String(number), action, ...(body.trim() ? ['--body', body.trim()] : [])], { cwd }); return true;
+  const text = String(body || '').trim();
+  if (decision === 'comment' && !text) throw new GhError('「コメントのみ」を送る場合は、コメントを入力してください。', 'gh pr review --comment はコメント本文が必要です。');
+  await run(['pr', 'review', String(number), action, ...(text ? ['--body', text] : [])], { cwd }); return true;
 }
 
 /* ------------------------- 課題・相談（Issue） ------------------------- */

@@ -3,6 +3,9 @@
 /** Choose a short, actionable next step for common Git/GitHub failures. */
 function recoveryGuidance(error) {
   const text = `${error?.message || ''}\n${error?.detail || ''}`;
+  if (/自分で作成した変更の提案|own pull request|reviews may not be submitted by pull request authors/i.test(text)) {
+    return { title: 'PRにコメントを投稿', steps: ['「GitHub」画面の「変更の提案」から対象のPRを開きます。', '「確認・レビュー」から「コメントを投稿」を選ぶと、作成者本人も通常のコメントを残せます。', '承認や修正依頼などのレビューは、別のメンバーに依頼してください。'], view: 'github', button: 'GitHubを開く' };
+  }
   if (/CONFLICT|ぶつかり|merge conflict|could not apply/i.test(text)) {
     return { title: '変更のぶつかりを解決', steps: ['「変更」画面でぶつかったファイルを確認します。', '採用する内容を選んで保存し、合流を続けます。', 'やり直したい場合は、同じ画面の「合流を中止」を選びます。'], view: 'changes', button: '変更を確認する' };
   }

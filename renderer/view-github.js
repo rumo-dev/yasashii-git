@@ -247,7 +247,7 @@ Views.github = (() => {
     } else if (action === 'review') {
       const r = await formDialog({ title: 'レビュー結果を送る', okLabel: '送信する', intro: '承認・修正依頼はGitHubの権限や保護ルールに従います。', fields: [
         { key: 'decision', label: '結果', type: 'select', value: 'comment', options: [{ value: 'comment', label: 'コメントのみ' }, { value: 'approve', label: '承認する' }, { value: 'changes', label: '修正を依頼する' }] },
-        { key: 'body', label: 'コメント（省略できます）', type: 'textarea', placeholder: '確認した内容や、直してほしい点' },
+        { key: 'body', label: 'コメント（承認・修正依頼では省略できます）', type: 'textarea', placeholder: '確認した内容や、直してほしい点' },
       ] });
       if (r && await withBusy('レビューを送信中…', () => GH('reviewPR', S.repo, p.number, r.decision, r.body))) { toast('レビューを送りました'); }
     } else if (action === 'comment') {
