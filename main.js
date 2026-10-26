@@ -6,6 +6,8 @@ const { spawn } = require('child_process');
 const git = require('./src/git');
 const gh = require('./src/gh');
 const updaterLib = require('./src/updater');
+const { safeProjectPath } = require('./src/path-safety');
+const IPC_ALLOWLIST = require('./src/ipc-allowlist');
 
 // Windows のタスクバーでアプリのアイコンを正しく識別できるようにする
 if (process.platform === 'win32') app.setAppUserModelId('jp.yasashii.git');
@@ -78,13 +80,6 @@ function resolveEditor(id) {
     if (file) return { id: editorId, label: spec.label, file };
   }
   return null;
-}
-function safeProjectPath(repo, rel) {
-  const root = path.resolve(repo);
-  const abs = rel ? path.resolve(root, rel) : root;
-  const relative = path.relative(root, abs);
-  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) throw new Error('プロジェクトの外のファイルは開けません。');
-  return abs;
 }
 function startDetached(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -193,13 +188,12 @@ const appApi = {
   },
   async openFolder(dir) { await shell.openPath(dir); return true; },
   async openFile(repo, rel) {
-    const abs = path.resolve(repo, rel);
-    if (path.relative(repo, abs).startsWith('..')) throw new Error('リポジトリの外のファイルは開けません。');
+    const abs = safeProjectPath(repo, rel);
     const err = await shell.openPath(abs);
     if (err) throw new Error('ファイルを開けませんでした：' + err);
     return true;
   },
-  async showInFolder(repo, rel) { shell.showItemInFolder(path.resolve(repo, rel)); return true; },
+  async showInFolder(repo, rel) { shell.showItemInFolder(safeProjectPath(repo, rel)); return true; },
   async copyText(text) { clipboard.writeText(String(text)); return true; },
   async version() { return app.getVersion(); },
   /* 自動更新（src/updater.js）。状態の変化は 'update-state' で画面へ届く */
@@ -244,12 +238,11 @@ function setupUpdater() {
 
 /* ------------------------------ IPC ------------------------------ */
 const NAMESPACES = { git, gh, app: appApi };
-const BLOCKED = new Set(['run', 'GitError', 'GhError', 'friendly', 'loginWeb']);
 
 ipcMain.handle('call', async (_e, ns, fn, args) => {
   try {
     const mod = NAMESPACES[ns];
-    if (!mod || BLOCKED.has(fn) || typeof mod[fn] !== 'function') throw new Error(`未対応の操作です: ${ns}.${fn}`);
+    if (!mod || !IPC_ALLOWLIST[ns]?.has(fn) || typeof mod[fn] !== 'function') throw new Error(`未対応の操作です: ${ns}.${fn}`);
     let a = args || [];
     // アップロードの進み具合を画面へ知らせる
     if (ns === 'git' && fn === 'push') a = [a[0], a[1] || {}, (p) => { try { _e.sender.send('progress', { op: 'push', ...p }); } catch (_) { /* 無視 */ } }];

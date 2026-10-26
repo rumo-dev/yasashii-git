@@ -166,9 +166,17 @@ async function showError(e) {
     if (r === 'retry') { toast('ログインを直しました。もう一度、操作をお試しください。'); return; }
     if (r === 'declined') return;
   }
-  const body = h('div', {}, h('p', { style: { whiteSpace: 'pre-wrap', marginTop: 0 } }, e.message || String(e)),
+  const guidance = recoveryGuidance(e);
+  const body = h('div', {},
+    h('p', { style: { whiteSpace: 'pre-wrap', marginTop: 0 } }, e.message || String(e)),
+    h('section', { class: 'recovery-guide' },
+      h('b', {}, `次に試すこと：${guidance.title}`),
+      h('ol', {}, guidance.steps.map((step) => h('li', {}, step)))),
     e.detail ? h('details', {}, h('summary', { class: 'muted' }, 'くわしい内容（Gitからのメッセージ）'), h('pre', {}, e.detail)) : null);
-  await modal({ title: '⚠ うまくいきませんでした', body, buttons: [{ label: '閉じる', kind: 'primary', value: true }] });
+  await modal({ title: '⚠ うまくいきませんでした', body, buttons: [
+    { label: '閉じる', value: true },
+    { label: guidance.button, kind: 'primary', value: () => { if (typeof go === 'function') go(guidance.view); return true; } },
+  ] });
 }
 
 /** 処理を実行：処理中表示 → 失敗ならエラー表示。成功時は結果、失敗時は undefined を返す */
