@@ -237,6 +237,7 @@ Views.github = (() => {
     const action = await modal({ title: `#${p.number} ${p.title}`, wide: true, body, buttons: [
       { label: 'レビューを依頼', value: 'request' },
       { label: 'レビュー結果を送る', value: 'review' },
+      { label: 'コメントを投稿', value: 'comment' },
       { label: '作業ブランチを更新', value: 'update' },
       { label: '閉じる', value: null },
     ] });
@@ -249,6 +250,11 @@ Views.github = (() => {
         { key: 'body', label: 'コメント（省略できます）', type: 'textarea', placeholder: '確認した内容や、直してほしい点' },
       ] });
       if (r && await withBusy('レビューを送信中…', () => GH('reviewPR', S.repo, p.number, r.decision, r.body))) { toast('レビューを送りました'); }
+    } else if (action === 'comment') {
+      const r = await formDialog({ title: 'PRにコメントを投稿', okLabel: '投稿する', fields: [
+        { key: 'body', label: 'コメント', type: 'textarea', required: true, placeholder: '提案へのコメント' },
+      ] });
+      if (r && await withBusy('コメントを投稿中…', () => GH('commentPR', S.repo, p.number, r.body))) { toast('コメントを投稿しました'); }
     } else if (action === 'update') {
       if (detail.mergeable === 'CONFLICTING' && !(await confirmDialog({ title: '作業ブランチを更新しますか？', message: '取り込み先の最新内容を提案のブランチへ取り込みます。競合がある場合は、作業ブランチで解消して再アップロードが必要です。', okLabel: '更新する' }))) return;
       if (await withBusy('作業ブランチを更新中…', () => GH('updatePRBranch', S.repo, p.number))) toast('作業ブランチを更新しました。状態を再確認してください。');
