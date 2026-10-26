@@ -26,7 +26,7 @@ def call(ns, fn, *a):
     r = urllib.request.Request("http://127.0.0.1:4599/", data=json.dumps({"ns": ns, "fn": fn, "args": list(a)}).encode())
     return json.loads(urllib.request.urlopen(r).read())
 INIT = """
-window.api = { call: async (ns, fn, ...a) => { const r = await window.__call(ns, fn, JSON.stringify(a)); if (r.ok) return r.value; const e = new Error(r.error.message); e.detail = r.error.detail; throw e; },
+window.api = { call: async (ns, fn, ...a) => { if (window.__failSafetyOnce && ns === 'git' && fn === 'safetyCheck') { window.__failSafetyOnce = false; throw new Error('テスト用の安全チェック失敗'); } const r = await window.__call(ns, fn, JSON.stringify(a)); if (r.ok) return r.value; const e = new Error(r.error.message); e.detail = r.error.detail; throw e; },
   ghLoginWeb: async () => ({}), onGhLoginCode() {}, onMenu() {}, onProgress() {}, onUpdateState() {} };
 """
 errors = []
@@ -105,7 +105,19 @@ try:
         pg.wait_for_selector(".toast:has-text('アップロードしました')", timeout=20000)
         check("設定を追加" in server_log(), "「それでも送る」を選ぶと送られる")
 
-        # 6. 設定でオフにすると、確認なしで送れる
+        # 6. 安全チェックに失敗したら知らせ、再試行が選べる
+        W("retry.txt", "安全チェックを再試行\n"); pg.wait_for_selector(".file-row:has-text('retry.txt')", timeout=9000)
+        pg.evaluate("window.__failSafetyOnce = true")
+        pg.fill(MEMO, "安全チェック失敗の再試行"); clear_toasts(pg)
+        pg.click("button:has-text('記録して、そのままアップロード')")
+        pg.wait_for_selector(f"{DLG}:has-text('安全チェックを完了できませんでした')", timeout=15000)
+        check(pg.is_visible(f"{DLG}:has-text('もう一度確認')") and pg.is_visible(f"{DLG}:has-text('確認せずに続ける')"), "安全チェック失敗時に再試行・明示的な続行を選べる")
+        check("安全チェック失敗の再試行" not in server_log(), "安全チェック失敗のままではアップロードされない")
+        pg.click(f"{DLG} button:has-text('もう一度確認')")
+        pg.wait_for_selector(".toast:has-text('アップロードしました')", timeout=20000)
+        check("安全チェック失敗の再試行" in server_log(), "再試行が成功するとアップロードできる")
+
+        # 7. 設定でオフにすると、確認なしで送れる
         pg.click(".nav-item[data-id=settings]")
         pg.wait_for_selector("text=アップロード前の安全チェック")
         pg.click(".card:has-text('アップロード前の安全チェック') input[type=checkbox]")

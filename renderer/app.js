@@ -563,8 +563,29 @@ const fmtBytes = (b) => (b >= 1048576 ? (b / 1048576).toFixed(b >= 10485760 ? 0 
  */
 async function safetyGate() {
   if (S.settings.safetyCheck === false) return true;
-  const r = await withBusy('送る前の確認中…', async () => { try { return await G('safetyCheck'); } catch (_) { return null; } });
-  if (!r || !r.findings.length) return true;
+  let checkError = null;
+  const r = await withBusy('送る前の確認中…', async () => {
+    try { return await G('safetyCheck'); }
+    catch (e) { checkError = e; return null; }
+  });
+  if (!r) {
+    const choice = await modal({
+      title: '安全チェックを完了できませんでした',
+      body: h('div', {},
+        h('p', {}, '秘密情報や大きなファイルが含まれていないか確認できませんでした。'),
+        h('p', { class: 'muted' }, checkError?.message || 'もう一度確認するか、内容を自分で確認してから続けてください。')),
+      buttons: [
+        { label: 'アップロードをやめる', value: 'cancel' },
+        { label: 'もう一度確認', kind: 'primary', value: 'retry' },
+        { label: '確認せずに続ける', kind: 'danger-solid', value: 'continue' },
+      ],
+    });
+    if (choice === 'retry') return safetyGate();
+    if (choice === 'continue') return true;
+    toast('アップロードを中止しました。');
+    return false;
+  }
+  if (!r.findings.length) return true;
 
   const blocked = r.findings.some((f) => f.level === 'block');
   const danger = r.findings.some((f) => f.level === 'danger');
