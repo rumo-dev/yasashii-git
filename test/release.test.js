@@ -51,5 +51,64 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ✓ ' + name)
   await t('同じ名前のリリースがあるときの文面', () => {
     assert.ok(/すでに/.test(gh.friendly('a release with the same tag name already exists: v1.0.0')));
   });
+  await t('公開先と分岐の不正な指定を拒否する', async () => {
+    await assert.rejects(() => gh.createRelease(repo, { tag: 'v1', repository: '--bad' }), /指定/);
+    await assert.rejects(() => gh.createRelease(repo, { tag: 'v1', repository: 'a/b', target: '-bad' }), /分岐/);
+    await assert.rejects(() => gh.createRelease(repo, { tag: 'v1', target: 'main' }), /分岐/);
+  });
+  await t('公開先の指定時のみ --repo と --target を渡し、既存タグも選べる', async () => {
+    const vm = require('vm');
+    const { EventEmitter } = require('events');
+    const calls = [];
+    const mod = { exports: {} };
+    vm.runInNewContext(fs.readFileSync(require.resolve('../src/gh'), 'utf8'), {
+      module: mod, process, Buffer, console,
+      require: (id) => id === 'child_process' ? { spawn: (cmd, args) => {
+        calls.push(args);
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.stdin = { end() {} };
+        queueMicrotask(() => { child.stdout.emit('data', Buffer.from('https://github.com/public/downloads/releases/tag/v1')); child.emit('close', 0); });
+        return child;
+      } } : id === './auth-errors' ? require('../src/auth-errors') : require(id),
+    });
+    await mod.exports.createRelease(repo, { tag: 'v1' });
+    assert.ok(calls[0].includes('--verify-tag')); assert.ok(!calls[0].includes('--repo'));
+    await mod.exports.createRelease(repo, { tag: 'v1', repository: 'public/downloads', target: 'main', draft: true });
+    assert.deepStrictEqual(Array.from(calls[1].slice(-5)), ['--repo', 'public/downloads', '--target', 'main', '--draft']);
+    assert.ok(!calls[1].includes('--verify-tag'));
+    await mod.exports.createRelease(repo, { tag: 'v1', repository: 'public/downloads' });
+    assert.ok(calls[2].includes('--verify-tag'));
+  });
+  await t('初心者向けリリーステンプレートを作成でき、既存ファイルを保護する', () => {
+    assert.ok(gh.listActionsTemplates().some((x) => x.id === 'release'));
+    const result = gh.createLocalActionsWorkflow(repo, { template: 'release' });
+    const { content } = gh.readLocalActionsWorkflow(repo, result.filename);
+    assert.ok(content.includes('workflow_dispatch:') && content.includes('default: true'));
+    assert.ok(content.includes('${{ inputs.repository }}'));
+    assert.ok(content.includes('RELEASE_TOKEN') && content.includes('contents: write'));
+    assert.ok(content.includes('gh "${args[@]}"'));
+    assert.throws(() => gh.createLocalActionsWorkflow(repo, { template: 'release' }), /すでに/);
+  });
+  await t('別リポジトリへの作成では、未送信のソースやローカルタグを送らない', async () => {
+    const vm = require('vm');
+    const calls = [];
+    const context = {
+      S: { repo, hasRemote: false, status: { hasCommits: true, ahead: 3, files: [] } },
+      refreshStatus: async () => {}, refreshAll: async () => {},
+      withBusy: async (_, fn) => fn(), withBusyThrow: async (_, fn) => fn(),
+      G: async (fn) => { assert.strictEqual(fn, 'releaseDraft'); return { headTags: [], commits: [], notes: '', suggested: 'v1' }; },
+      GH: async (...args) => { calls.push(args); return { url: 'https://github.com/public/downloads/releases/tag/v1' }; },
+      formDialog: async () => ({ repository: 'public/downloads', target: 'main', tag: 'v1', title: '', notes: '公開用の説明', draft: true }),
+      confirmDialog: async () => true, modal: async () => false, h: () => ({}),
+      toast: (message) => assert.fail(message), showError: (e) => { throw e; },
+      doPush: () => assert.fail('ソースを送信してはいけない'),
+    };
+    vm.createContext(context);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../renderer/release.js'), 'utf8'), context);
+    assert.strictEqual(await vm.runInContext('releaseFlow()', context), true);
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0][2].repository, 'public/downloads');
+    assert.strictEqual(calls[0][2].target, 'main');
+  });
   console.log(`\n${n} 件成功`);
 })();
