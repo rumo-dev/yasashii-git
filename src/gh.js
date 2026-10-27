@@ -571,11 +571,18 @@ async function listReleases(cwd) {
   return json(['release', 'list', '--limit', '30', '--json', 'tagName,name,isDraft,isPrerelease,isLatest,publishedAt,createdAt'], { cwd });
 }
 /** GitHub のリリースを作る。目印（タグ）は、先にサーバーへ送ってある前提（--verify-tag） */
-async function createRelease(cwd, { tag, title = '', notes = '', draft = false, prerelease = false } = {}) {
+async function createRelease(cwd, { tag, title = '', notes = '', draft = false, prerelease = false, repository = '', target = '' } = {}) {
+  repository = String(repository || '').trim();
+  target = String(target || '').trim();
+  if (repository) checkRef(repository);
+  if (target && (!repository || target.startsWith('-') || /[\s\0]/.test(target))) throw new GhError('作成先の分岐名を確認してください。', target);
   tag = (tag || '').trim();
   if (!tag) throw new GhError('バージョン名を入力してください。', '');
   if (tag.startsWith('-') || /\s/.test(tag)) throw new GhError('バージョン名に空白や、先頭の「-」は使えません。', tag);
-  const args = ['release', 'create', tag, '--title', (title || tag).trim(), '--notes', notes || '', '--verify-tag'];
+  const args = ['release', 'create', tag, '--title', (title || tag).trim(), '--notes', notes || ''];
+  if (repository) args.push('--repo', repository);
+  if (target) args.push('--target', target);
+  else args.push('--verify-tag');
   if (draft) args.push('--draft');
   if (prerelease) args.push('--prerelease');
   const r = await run(args, { cwd });
@@ -584,6 +591,74 @@ async function createRelease(cwd, { tag, title = '', notes = '', draft = false, 
 
 /* ------------------------------ GitHub Actions ------------------------------ */
 const ACTIONS_TEMPLATES = {
+  release: {
+    filename: 'release.yml', label: 'リリースを作る（手動・別リポジトリ対応）',
+    content: `# 使い方: 記録・アップロード後、Actions の「リリースを作る」を手動実行します。
+# tag=v1.0.0 のように入力します。最初は下書きで試してください。
+# repository は空欄ならこのリポジトリ。別の公開先は「所有者/リポジトリ名」。
+# 別リポジトリの場合: GitHub の Settings > Secrets and variables > Actions に
+# RELEASE_TOKEN を登録します。公開先の Contents: Read and write 権限を持つ
+# fine-grained personal access token を使います（組織では承認が必要な場合があります）。
+# 公開先には先に README などの記録と main 分岐を作成してください。
+# ソースコードの転送・ビルド・配布ファイルの添付は行いません。
+name: リリースを作る
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'バージョン名（例: v1.0.0）'
+        required: true
+        type: string
+      repository:
+        description: '公開先（所有者/リポジトリ名、省略するとこのリポジトリ）'
+        type: string
+      target:
+        description: '公開先の分岐（タグがない場合に使用）'
+        default: main
+        required: true
+        type: string
+      notes:
+        description: 'リリースノート（公開する変更内容）'
+        type: string
+      draft:
+        description: '下書きとして保存（確認後GitHubで公開できます）'
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リリースを作成
+        env:
+          GH_TOKEN: \${{ inputs.repository != '' && secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TOKEN: \${{ secrets.RELEASE_TOKEN }}
+          DESTINATION: \${{ inputs.repository }}
+          SOURCE: \${{ github.repository }}
+          TAG: \${{ inputs.tag }}
+          TARGET: \${{ inputs.target }}
+          NOTES: \${{ inputs.notes }}
+          DRAFT: \${{ inputs.draft }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$DESTINATION" && -z "$RELEASE_TOKEN" ]]; then
+            echo '別リポジトリへの公開には RELEASE_TOKEN の登録が必要です。'
+            exit 1
+          fi
+          REPO="\${DESTINATION:-$SOURCE}"
+          [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo '公開先の形式を確認してください'; exit 1; }
+          [[ -n "$TAG" && "$TAG" != -* && ! "$TAG" =~ [[:space:]] ]] || { echo 'バージョン名を確認してください'; exit 1; }
+          [[ -n "$TARGET" && "$TARGET" != -* && ! "$TARGET" =~ [[:space:]] ]] || { echo '分岐名を確認してください'; exit 1; }
+          args=(release create "$TAG" --repo "$REPO" --target "$TARGET" --title "$TAG" --notes "$NOTES")
+          if [[ "$DRAFT" == true ]]; then args+=(--draft); fi
+          gh "\${args[@]}"
+`,
+  },
   manual: {
     filename: 'manual.yml', label: '手動実行できる最小例',
     content: `name: 手動で試す\n\non:\n  workflow_dispatch:\n\njobs:\n  hello:\n    runs-on: ubuntu-latest\n    steps:\n      - name: メッセージを表示\n        run: echo "GitHub Actions が動きました"\n`,
