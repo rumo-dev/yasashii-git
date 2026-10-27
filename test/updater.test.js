@@ -175,5 +175,37 @@ const make = (au, extra = {}) => U.createUpdater({ autoUpdater: au, currentVersi
     assert.strictEqual(u.install(), false);
   });
 
+  await t('自動確認の間隔：起動時・間隔変更・停止・再開・確認失敗後の継続', async () => {
+    const { intervalMinutes, createUpdateSchedule } = require('../src/update-schedule');
+    for (const value of [15, 30, 60, 360, 720, 1440]) assert.strictEqual(intervalMinutes(value), value);
+    for (const value of [undefined, null, 0, -1, 'bad', 1000000]) assert.strictEqual(intervalMinutes(value), 60);
+    let checks = 0;
+    const timers = new Map();
+    let id = 0;
+    const scheduler = createUpdateSchedule({
+      check: async () => { checks++; throw new Error('offline'); },
+      setTimer: (fn, delay) => { timers.set(++id, { fn, delay }); return id; },
+      clearTimer: (key) => timers.delete(key),
+    });
+    const delay = () => { assert.strictEqual(timers.size, 1); return [...timers.values()][0].delay; };
+    const fire = async () => {
+      const [key, timer] = [...timers.entries()][0]; timers.delete(key); timer.fn();
+      await new Promise((resolve) => setImmediate(resolve));
+    };
+    scheduler.configure({}, { startup: true });
+    assert.strictEqual(delay(), 15000);
+    await fire(); assert.strictEqual(checks, 1); assert.strictEqual(delay(), 3600000);
+    scheduler.configure({ autoUpdateCheckMin: 30 });
+    assert.strictEqual(delay(), 1800000);
+    await fire(); assert.strictEqual(checks, 2); assert.strictEqual(delay(), 1800000);
+    scheduler.configure({ autoUpdateCheck: false, autoUpdateCheckMin: 30 });
+    assert.strictEqual(timers.size, 0);
+    scheduler.configure({ autoUpdateCheck: false }, { startup: true });
+    assert.strictEqual(timers.size, 0);
+    scheduler.configure({ autoUpdateCheck: true, autoUpdateCheckMin: 1440 });
+    assert.strictEqual(delay(), 86400000);
+    scheduler.stop(); assert.strictEqual(timers.size, 0);
+  });
+
   console.log(`\n${n} 件成功`);
 })();

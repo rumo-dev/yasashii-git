@@ -442,13 +442,13 @@ function updateChrome() {
   const bar = clear($('#topbar'));
   const branchLabel = st.detached ? jp('detached') : (st.branch || '（まだ記録がありません）');
   [
-    h('button', { class: 'branch-chip' + (st.detached ? ' detached' : ''), title: '作業の分岐を切り替える', onclick: () => go('branches') }, '🌿', h('span', {}, branchLabel), ' ▾'),
-    st.upstream ? h('span', { class: 'muted', title: jp('upstream') }, '⇄ ' + st.upstream) : null,
+    h('button', { class: 'branch-chip' + (st.detached ? ' detached' : ''), title: `${branchLabel}：作業の分岐を切り替える`, onclick: () => go('branches') }, '🌿', h('span', {}, branchLabel), ' ▾'),
+    st.upstream ? h('span', { class: 'muted topbar-upstream', title: `${jp('upstream')}: ${st.upstream}` }, '⇄ ' + st.upstream) : null,
     h('div', { class: 'spacer' }),
-    h('button', { class: 'btn', id: 'syncAllBtn', title: 'サーバーの更新を確認して、新しいものがあれば取り込み、受信箱（招待・お知らせ）も確認します', onclick: doSyncAll }, '🔃 まとめて更新'),
-    h('button', { class: 'btn', title: hint('fetch'), onclick: doFetch }, '🔄 ', termLabel('fetch')),
-    h('button', { class: 'btn' + (st.behind ? ' primary' : ''), disabled: !st.behind, title: st.behind ? hint('pull') : '取り込む更新はありません', onclick: doPull }, '⬇️ ', termLabel('pull'), h('span', { class: 'badge' }, '↓' + (st.behind || 0))),
-    h('button', { class: 'btn' + (st.ahead ? ' primary' : ''), disabled: !st.ahead, title: st.ahead ? hint('push') : 'アップロードする記録はありません', onclick: doPush }, '⬆️ ', termLabel('push'), h('span', { class: 'badge' }, '↑' + (st.ahead || 0))),
+    h('button', { class: 'btn', id: 'syncAllBtn', 'aria-label': 'まとめて更新', title: 'サーバーの更新を確認して、新しいものがあれば取り込み、受信箱（招待・お知らせ）も確認します', onclick: doSyncAll }, '🔃', h('span', { class: 'topbar-action-label' }, 'まとめて更新')),
+    h('button', { class: 'btn', 'aria-label': 'サーバーの更新を確認', title: hint('fetch'), onclick: doFetch }, '🔄 ', h('span', { class: 'topbar-action-label' }, termLabel('fetch'))),
+    h('button', { class: 'btn' + (st.behind ? ' primary' : ''), 'aria-label': '取り込む', disabled: !st.behind, title: st.behind ? hint('pull') : '取り込む更新はありません', onclick: doPull }, '⬇️ ', h('span', { class: 'topbar-action-label' }, termLabel('pull')), h('span', { class: 'badge' }, '↓' + (st.behind || 0))),
+    h('button', { class: 'btn' + (st.ahead ? ' primary' : ''), 'aria-label': 'アップロード', disabled: !st.ahead, title: st.ahead ? hint('push') : 'アップロードする記録はありません', onclick: doPush }, '⬆️ ', h('span', { class: 'topbar-action-label' }, termLabel('push')), h('span', { class: 'badge' }, '↑' + (st.ahead || 0))),
     h('div', { class: 'topbar-utility-buttons' },
       h('button', { class: 'btn ghost', title: 'エクスプローラー / Finder でフォルダを開く', onclick: () => APP('openFolder', S.repo) }, '📂'),
       h('button', { class: 'btn ghost', title: 'チュートリアルサイトをブラウザーで開く', 'aria-label': 'チュートリアルサイトを開く', onclick: () => APP('openExternal', 'https://rumo-dev.github.io/yasashii-git/').catch(showError) }, '🔰'),

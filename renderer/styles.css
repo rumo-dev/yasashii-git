@@ -77,10 +77,28 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .link:hover { color: var(--text); text-decoration: underline; }
 
 /* ---- メイン ---- */
-#main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-#topbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; container-type: inline-size; }
+#topbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: nowrap; flex-shrink: 0; }
+#topbar > * { flex-shrink: 0; white-space: nowrap; }
+#topbar .topbar-upstream { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 #topbar .spacer { flex: 1; }
 #topbar .topbar-utility-buttons { display: inline-flex; align-items: center; flex-wrap: nowrap; gap: 6px; flex: none; }
+#topbar .branch-chip { min-width: 0; flex-shrink: 1; }
+#topbar .branch-chip span { min-width: 0; }
+#topbar .badge { max-width: 64px; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 1100px) {
+  #topbar { gap: 6px; padding-inline: 10px; }
+  #topbar .btn { padding-inline: 8px; gap: 4px; }
+  #topbar .en { display: none; }
+  #topbar .topbar-upstream { max-width: 100px; flex-shrink: 1; }
+  #topbar .branch-chip { max-width: 180px; }
+  #topbar .topbar-utility-buttons { gap: 2px; }
+}
+@container (max-width: 900px) {
+  #topbar .topbar-action-label, #topbar .topbar-upstream { display: none; }
+  #topbar .branch-chip { max-width: 320px; flex: 1; }
+  #topbar .spacer { display: none; }
+}
 .branch-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 16px; background: var(--accent-bg); color: var(--accent-d); font-weight: 700; border: 0; cursor: pointer; max-width: 320px; }
 .branch-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .branch-chip.detached { background: var(--warn-bg); color: var(--warn); }

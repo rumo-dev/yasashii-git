@@ -6,6 +6,8 @@ const { spawn } = require('child_process');
 const git = require('./src/git');
 const gh = require('./src/gh');
 const updaterLib = require('./src/updater');
+const { createUpdateSchedule } = require('./src/update-schedule');
+const { openWindowsTerminal } = require('./src/windows-terminal');
 const { safeProjectPath } = require('./src/path-safety');
 const IPC_ALLOWLIST = require('./src/ipc-allowlist');
 
@@ -26,7 +28,7 @@ let win = null;
 
 /* ----------------------------- 保存データ ----------------------------- */
 const storePath = () => path.join(app.getPath('userData'), 'settings.json');
-const DEFAULTS = { recent: [], showOriginal: true, theme: 'auto', lastRepo: null, safetyCheck: true, autoUpdateCheck: true, editor: 'auto' };
+const DEFAULTS = { recent: [], showOriginal: true, theme: 'auto', lastRepo: null, safetyCheck: true, autoUpdateCheck: true, autoUpdateCheckMin: 60, editor: 'auto' };
 function readStore() {
   try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(storePath(), 'utf8')) }; }
   catch (_) { return { ...DEFAULTS }; }
@@ -109,20 +111,7 @@ async function launchEditor(repo, rel, editor = 'auto') {
 }
 async function launchTerminal(repo) {
   const dir = safeProjectPath(repo);
-  if (process.platform === 'win32') {
-    const local = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
-    const wt = findOnPath(['wt.exe']) || path.join(local, 'Microsoft', 'WindowsApps', 'wt.exe');
-    if (executable(wt)) {
-      try { return await startDetached(wt, ['-d', dir], { cwd: dir, windowsHide: false }); }
-      catch (_) { /* Windows Terminal が起動できない場合は PowerShell に切り替える */ }
-    }
-    // Electron は GUI アプリなので、PowerShell を直接起動するとコンソール窓が表示されない環境がある。
-    // cmd の start を経由して新しいコンソールを作り、パスは PowerShell の EncodedCommand で安全に渡す。
-    const psCommand = `Set-Location -LiteralPath '${dir.replace(/'/g, "''")}'`;
-    const encoded = Buffer.from(psCommand, 'utf16le').toString('base64');
-    const command = `start "" powershell.exe -NoLogo -NoExit -EncodedCommand ${encoded}`;
-    return startDetached(process.env.ComSpec || 'cmd.exe', ['/d', '/c', command], { cwd: dir });
-  }
+  if (process.platform === 'win32') return openWindowsTerminal(dir);
   if (process.platform === 'darwin') {
     const command = `cd '${dir.replace(/'/g, "'\\''")}'`;
     const script = `tell application "Terminal" to do script "${command.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
@@ -155,6 +144,7 @@ const appApi = {
   async openTerminal(repo) { return launchTerminal(repo); },
   async setSettings(patch) {
     const s = { ...readStore(), ...patch }; writeStore(s);
+    if (updateSchedule && (Object.hasOwn(patch, 'autoUpdateCheck') || Object.hasOwn(patch, 'autoUpdateCheckMin'))) updateSchedule.configure(s);
     if (patch.autoUpdateCheck === true && updater) updater.check({ manual: false }).catch(() => {});
     return s;
   },
@@ -207,9 +197,8 @@ const appApi = {
 };
 
 /* ------------------------------ 自動更新 ------------------------------ */
-const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;    // 起動中は1時間ごとに確認
-const UPDATE_FIRST_CHECK_MS = 15 * 1000;             // 起動して15秒後に最初の確認（起動をじゃましない）
 let updater = null;
+let updateSchedule = null;
 
 function setupUpdater() {
   // 配布先の設定（インストーラーを作るとき electron-builder が app-update.yml に書き込む。開発中などは無い）
@@ -231,9 +220,8 @@ function setupUpdater() {
     openExternal: (url) => shell.openExternal(url),
   });
   updater.onState((st) => { if (win && !win.isDestroyed()) win.webContents.send('update-state', st); });
-  const tick = () => { if (readStore().autoUpdateCheck !== false) updater.check({ manual: false }).catch(() => {}); };
-  setTimeout(tick, UPDATE_FIRST_CHECK_MS);
-  setInterval(tick, UPDATE_CHECK_INTERVAL_MS);
+  updateSchedule = createUpdateSchedule({ check: () => updater.check({ manual: false }) });
+  updateSchedule.configure(readStore(), { startup: true });
 }
 
 /* ------------------------------ IPC ------------------------------ */

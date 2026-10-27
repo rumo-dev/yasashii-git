@@ -93,7 +93,8 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ✓ ' + name)
     const vm = require('vm');
     const calls = [];
     const context = {
-      S: { repo, hasRemote: false, status: { hasCommits: true, ahead: 3, files: [] } },
+      S: { repo, settings: {}, hasRemote: false, status: { hasCommits: true, ahead: 3, files: [] } },
+      saveSettings: async (patch) => { Object.assign(context.S.settings, patch); },
       refreshStatus: async () => {}, refreshAll: async () => {},
       withBusy: async (_, fn) => fn(), withBusyThrow: async (_, fn) => fn(),
       G: async (fn) => { assert.strictEqual(fn, 'releaseDraft'); return { headTags: [], commits: [], notes: '', suggested: 'v1' }; },
@@ -109,6 +110,32 @@ async function t(name, fn) { try { await fn(); n++; console.log('  ✓ ' + name)
     assert.strictEqual(calls.length, 1);
     assert.strictEqual(calls[0][2].repository, 'public/downloads');
     assert.strictEqual(calls[0][2].target, 'main');
+    assert.strictEqual(context.S.settings.releaseDestinations[repo].repository, 'public/downloads');
+    // 再起動時と同じく、保存したJSONから設定を読み直す。
+    context.S.settings = JSON.parse(JSON.stringify(context.S.settings));
+    context.formDialog = async ({ fields }) => {
+      assert.strictEqual(fields.find((f) => f.key === 'repository').value, 'public/downloads');
+      assert.strictEqual(fields.find((f) => f.key === 'target').value, 'main');
+      return null;
+    };
+    assert.strictEqual(await vm.runInContext('releaseFlow()', context), false);
+    context.S.repo = path.join(tmp, 'other-project');
+    context.formDialog = async ({ fields }) => {
+      assert.strictEqual(fields.find((f) => f.key === 'repository').value, '');
+      assert.strictEqual(fields.find((f) => f.key === 'target').value, '');
+      return { repository: 'other/releases', target: 'stable', tag: 'v2', title: '', notes: '' };
+    };
+    await vm.runInContext('releaseFlow()', context);
+    assert.strictEqual(context.S.settings.releaseDestinations[repo].repository, 'public/downloads');
+    assert.strictEqual(context.S.settings.releaseDestinations[context.S.repo].target, 'stable');
+    // 空欄に戻した設定も保存し、別プロジェクトの設定は保持する。
+    context.S.repo = repo;
+    context.toast = () => {};
+    context.formDialog = async () => ({ repository: '', target: '', tag: 'v3', title: '', notes: '' });
+    await vm.runInContext('releaseFlow()', context);
+    assert.strictEqual(context.S.settings.releaseDestinations[repo].repository, '');
+    assert.strictEqual(context.S.settings.releaseDestinations[repo].target, '');
+    assert.strictEqual(context.S.settings.releaseDestinations[path.join(tmp, 'other-project')].repository, 'other/releases');
   });
   console.log(`\n${n} 件成功`);
 })();

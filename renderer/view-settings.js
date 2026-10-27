@@ -43,7 +43,15 @@ Views.settings = (() => {
           h('i', { style: { background: t.colors[1] } }), h('i', { style: { background: t.colors[2] } })),
         h('span', {}, t.name))));
 
-    const updChk = h('input', { type: 'checkbox', checked: S.settings.autoUpdateCheck !== false, onchange: () => saveSettings({ autoUpdateCheck: updChk.checked }).then(() => toast(updChk.checked ? '新しい版の自動確認をオンにしました' : '新しい版の自動確認をオフにしました')) });
+    const updateIntervals = [[15, '15分ごと'], [30, '30分ごと'], [60, '1時間ごと（標準）'], [360, '6時間ごと'], [720, '12時間ごと'], [1440, '24時間ごと']];
+    const updateMinutes = updateIntervals.some(([m]) => m === Number(S.settings.autoUpdateCheckMin)) ? Number(S.settings.autoUpdateCheckMin) : 60;
+    const updInterval = h('select', { style: { width: 'auto' }, disabled: S.settings.autoUpdateCheck === false,
+      onchange: () => saveSettings({ autoUpdateCheckMin: Number(updInterval.value) }).then(() => toast('更新を確認する間隔を保存しました')) },
+      updateIntervals.map(([value, label]) => h('option', { value, selected: value === updateMinutes }, label)));
+    const updChk = h('input', { type: 'checkbox', checked: S.settings.autoUpdateCheck !== false, onchange: () => {
+      updInterval.disabled = !updChk.checked;
+      saveSettings({ autoUpdateCheck: updChk.checked }).then(() => toast(updChk.checked ? '新しい版の自動確認をオンにしました' : '新しい版の自動確認をオフにしました'));
+    } });
     const updStatus = h('div', { class: 'muted', style: { marginBottom: '10px' } });
     const updBtns = h('div', { class: 'btn-row', style: { marginBottom: '10px' } });
     const drawUpd = () => {
@@ -61,7 +69,9 @@ Views.settings = (() => {
     const updCard = h('div', { class: 'card' }, h('h3', {}, '🆕 アプリの更新'),
       updStatus, updBtns,
       h('label', { class: 'check' }, updChk, h('span', {}, '起動中、ときどき新しい版がないか自動で確認して、見つかったら知らせる（おすすめ）',
-        h('div', { class: 'muted', style: { fontSize: '12px' } }, '知らせるだけで、勝手に入れ替えることはありません。「更新する」を押したときだけ更新します。'))));
+        h('div', { class: 'muted', style: { fontSize: '12px' } }, '知らせるだけで、勝手に入れ替えることはありません。「更新する」を押したときだけ更新します。'))),
+      h('label', { class: 'field' }, h('span', {}, '自動で更新を確認する間隔'), updInterval,
+        h('small', {}, 'アプリの起動15秒後に最初の確認を行い、その後は選んだ間隔で確認します。間隔の変更はすぐ反映されます。')));
     drawUpd(); Upd.bind(updCard, drawUpd);
 
     clear(root).appendChild(h('div', { class: 'pad' },

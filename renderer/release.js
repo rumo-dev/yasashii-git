@@ -14,6 +14,8 @@ async function releaseRemoteName() {
 
 async function releaseFlow({ tag = '' } = {}) {
   if (!S.repo) return false;
+  const project = S.repo;
+  const saved = (S.settings.releaseDestinations || {})[project] || {};
   await refreshStatus(true);
   const st = S.status;
   if (!st.hasCommits) { toast('まだ記録がありません。先に「変更を記録」してください。', 'error'); return false; }
@@ -28,8 +30,8 @@ async function releaseFlow({ tag = '' } = {}) {
   const r = await formDialog({
     title: '🚀 リリースを作る', okLabel: 'リリースを作る', wide: true, intro,
     fields: [
-      { key: 'repository', label: 'リリース先リポジトリ（省略するとこのプロジェクト）', placeholder: '例：your-name/app-releases', help: '所有者/リポジトリ名で指定します。別のリポジトリへソースコードは送信しません。書き込み権限が必要です。' },
-      { key: 'target', label: '指定先でタグを作る分岐（省略すると既存タグを使用）', placeholder: '例：main', help: 'リリース先を指定した場合のみ使用します。指定先にバージョン名のタグがない場合、この分岐から作ります。空のリポジトリには先にREADMEなどの記録を作成してください。' },
+      { key: 'repository', label: 'リリース先リポジトリ（省略するとこのプロジェクト）', value: saved.repository || '', placeholder: '例：your-name/app-releases', help: '所有者/リポジトリ名で指定します。公開先と分岐は、このプロジェクト用に保存され、次回も入力されます。別のリポジトリへソースコードは送信しません。書き込み権限が必要です。' },
+      { key: 'target', label: '指定先でタグを作る分岐（省略すると既存タグを使用）', value: saved.target || '', placeholder: '例：main', help: 'リリース先を指定した場合のみ使用します。指定先にバージョン名のタグがない場合、この分岐から作ります。空のリポジトリには先にREADMEなどの記録を作成してください。' },
       { key: 'tag', label: 'バージョン名', value: tag || d.headTags[0] || d.suggested, mono: true, required: true, help: '例：v1.0.0　（空白は使えません）' },
       { key: 'title', label: 'タイトル（省略するとバージョン名）', placeholder: '例：ログイン機能を追加' },
       { key: 'notes', label: 'リリースノート', type: 'textarea', rows: 10, value: d.notes },
@@ -44,6 +46,7 @@ async function releaseFlow({ tag = '' } = {}) {
   if (repository && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) { toast('リリース先は「所有者/リポジトリ名」で入力してください。', 'error'); return false; }
   if (target && (!repository || target.startsWith('-') || /[\s\0]/.test(target))) { toast('作成先の分岐名とリリース先を確認してください。', 'error'); return false; }
   if (repository && !(await confirmDialog({ title: 'リリース先を確認', message: `「${repository}」に「${name}」を${r.draft ? '下書き保存' : '公開'}します。\n${target ? `タグがなければ指定先の「${target}」から作ります。` : '指定先にある同名のタグを使用します。'}\nリリースノートには、このプロジェクトの記録のメモが含まれます。内容を確認してください。`, okLabel: 'このリポジトリに作る' }))) return false;
+  await saveSettings({ releaseDestinations: { ...(S.settings.releaseDestinations || {}), [project]: { repository, target } } });
 
   if (!repository) {
     if (!S.hasRemote) { toast('先に「アップロード」して、GitHubにプロジェクトを作ってください。', 'error'); return false; }
